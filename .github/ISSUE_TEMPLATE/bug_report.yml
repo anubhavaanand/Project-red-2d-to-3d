@@ -1,0 +1,125 @@
+name: Bug report
+description: Report a defect, crash, silent fallback or wrong benchmark number.
+title: "[bug] "
+labels: ["bug", "status:triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Read `CONTRIBUTING.md` and `docs/ISSUES.md` first. If this is already in the
+        register, comment on that issue instead of opening a duplicate.
+
+  - type: input
+    id: issue_id
+    attributes:
+      label: Related issue ID
+      description: The ID from docs/ISSUES.md, if this is a known finding.
+      placeholder: "EVAL-03"
+    validations:
+      required: false
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - "component:api"
+        - "component:app"
+        - "component:engines"
+        - "component:triposr"
+        - "component:lgm"
+        - "component:trellis"
+        - "component:spar3d"
+        - "component:sf3d"
+        - "component:evaluation"
+        - "component:metrics"
+        - "component:rendering"
+        - "component:preprocessing"
+        - "component:export"
+        - "component:scripts"
+        - "component:kaggle"
+        - "component:notebooks"
+        - "component:packaging"
+        - "component:docs"
+        - "component:data"
+        - "component:ci"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - "severity:critical"
+        - "severity:high"
+        - "severity:medium"
+        - "severity:low"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: Include the exact command, object ID, engine and observed output.
+      placeholder: |
+        Command:
+        Object/engine:
+        Expected:
+        Actual:
+    validations:
+      required: true
+
+  - type: textarea
+    id: where
+    attributes:
+      label: Where in the code?
+      description: Use file.py:line references.
+      placeholder: "src/evaluation/benchmark_runner.py:427-428"
+    validations:
+      required: false
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: Smallest input or script that reproduces the issue. Do not paste secrets.
+      render: bash
+    validations:
+      required: false
+
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      description: OS, Python, torch/CUDA, GPU, install method, code SHA.
+      placeholder: |
+        OS:
+        Python:
+        torch/CUDA:
+        GPU:
+        Install:
+        code_sha:
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: protocol
+    attributes:
+      label: Protocol impact
+      options:
+        - label: This change affects a measured number (CD, F-score, PSNR, LPIPS, latency, VRAM).
+        - label: This change affects the locked protocol (sampling, alignment, rendering).
+        - label: I have read `README.md` §Protocol and `results/README.md`.
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / traceback
+      description: Relevant output only. Do not include HF tokens or personal paths you do not want public.
+      render: text
+    validations:
+      required: false

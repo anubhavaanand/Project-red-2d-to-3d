@@ -1,0 +1,72 @@
+name: Feature request
+description: Propose a new engine, metric, export format, API endpoint or tooling change.
+title: "[feature] "
+labels: ["enhancement", "status:triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Read `CONTRIBUTING.md` and `docs/ISSUES.md` first. For a new engine, read
+        `src/engines/base.py` and `src/engines/triposr_engine.py`.
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - "component:api"
+        - "component:app"
+        - "component:engines"
+        - "component:evaluation"
+        - "component:metrics"
+        - "component:export"
+        - "component:scripts"
+        - "component:kaggle"
+        - "component:packaging"
+        - "component:docs"
+        - "component:ci"
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the user-visible or scientific limitation.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: Be concrete about files and interfaces. For an engine, describe how it maps to `AbstractEngine`.
+    validations:
+      required: true
+
+  - type: textarea
+    id: protocol
+    attributes:
+      label: Protocol and results impact
+      description: Does this change a measured number or the locked protocol? If yes, describe the versioning/migration plan.
+    validations:
+      required: true
+
+  - type: textarea
+    id: verification
+    attributes:
+      label: How will you verify it?
+      description: Test, script or before/after numbers.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: deps
+    attributes:
+      label: Dependencies
+      options:
+        - label: This adds a new third-party dependency.
+        - label: This requires a CUDA extension or GPU.
+        - label: This changes a published number.
+    validations:
+      required: false

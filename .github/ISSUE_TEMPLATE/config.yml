@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Newcomer guide
+    url: https://github.com/anubhavaanand/Project-RED-image-to-3d/blob/main/CONTRIBUTING.md
+    about: Read this first: project overview, reading path and file map.
+  - name: Known issues register
+    url: https://github.com/anubhavaanand/Project-RED-image-to-3d/blob/main/docs/ISSUES.md
+    about: Search 240+ audited issues before opening a new one.
+  - name: Label taxonomy
+    url: https://github.com/anubhavaanand/Project-RED-image-to-3d/blob/main/docs/LABELS.md
+    about: How type, severity, component and status labels are used.

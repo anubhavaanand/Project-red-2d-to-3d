@@ -139,6 +139,18 @@ python scripts/rebuild_figures.py        # set BENCH_ROOT if the repo is not in 
 
 See [results/README.md](results/README.md) for the canonical CSV/TeX files and the difference between the canonical-10 and n = 100 runs. Large per-run render dumps are kept out of git.
 
+## Contributing and known issues
+
+New contributors should start with [`CONTRIBUTING.md`](CONTRIBUTING.md): it explains the
+project, gives a 20-minute reading path, maps "I want to work on X" to files, and lists
+verification commands. The full security/bug audit is in
+[`docs/ISSUES.md`](docs/ISSUES.md) (249 labelled findings with file/line evidence and fix
+guidance); label definitions are in [`docs/LABELS.md`](docs/LABELS.md).
+
+If you want a first task, see `CONTRIBUTING.md` §8 or the `good first issue` entries in
+`docs/ISSUES.md`. Please read the locked-protocol rules before changing any metric or
+rendering code.
+
 ## Citation
 
 ```bibtex
