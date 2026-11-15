@@ -4,7 +4,6 @@ SPAR3D Engine — audited wrapper for Stability-AI/stable-point-aware-3d (arXiv:
 
 from __future__ import annotations
 
-import sys
 import time
 from pathlib import Path
 from typing import Dict, Any
@@ -12,7 +11,6 @@ from typing import Dict, Any
 import numpy as np
 import torch
 from PIL import Image
-from scipy.spatial import cKDTree
 
 from .base import AbstractEngine, ReconstructionResult, Mesh3D
 from ._compat import spar3d_compat_shims
@@ -172,6 +170,9 @@ class Spar3dEngine(AbstractEngine):
         and repair any unbaked black UV-seam texels via 3D k-NN interpolation.
         """
         try:
+            # ENG-45: scipy is only needed when baking vertex colours.
+            from scipy.spatial import cKDTree
+
             vis = getattr(tm, "visual", None)
             if vis is None:
                 return None

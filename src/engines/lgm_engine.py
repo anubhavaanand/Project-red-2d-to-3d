@@ -13,7 +13,6 @@ Fixes applied from repo_2_lgm.txt & repo_1_triposr.txt audit:
 
 from __future__ import annotations
 
-import sys
 import time
 from pathlib import Path
 from typing import Dict, Any, Optional
@@ -21,8 +20,6 @@ from typing import Dict, Any, Optional
 import numpy as np
 import torch
 from PIL import Image
-from safetensors.torch import load_file
-from huggingface_hub import hf_hub_download
 
 from .base import AbstractEngine, ReconstructionResult, Mesh3D, GaussianCloud
 from ._compat import lgm_xformers_shim
@@ -94,6 +91,11 @@ class LGMEngine(AbstractEngine):
             from mvdream.pipeline_mvdream import MVDreamPipeline
             from core.options import Options, config_defaults
             from core.models import LGM
+
+            # ENG-45: import the download/checkpoint stack here, not at module
+            # import, so importing this engine stays cheap.
+            from huggingface_hub import hf_hub_download
+            from safetensors.torch import load_file
 
             print("[LGM] Loading U-Net from ashawkey/LGM …")
             self.opt = config_defaults["big"] if self.big else Options()
