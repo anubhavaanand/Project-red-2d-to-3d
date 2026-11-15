@@ -45,6 +45,31 @@ class LgmViewError(RuntimeError):
     """ENG-14: raised when ImageDream returns an unexpected view payload."""
 
 
+# ENG-17: opacity thresholds used to build the foreground set, tried in order
+# until enough points survive. These are the values the published numbers were
+# produced with; they are configurable per engine instance.
+DEFAULT_OPACITY_THRESHOLDS = (0.10, 0.08, 0.03)
+DEFAULT_MIN_FOREGROUND_POINTS = 200
+
+
+def _select_foreground(
+    opacities: np.ndarray,
+    min_points: int = DEFAULT_MIN_FOREGROUND_POINTS,
+    thresholds: tuple = DEFAULT_OPACITY_THRESHOLDS,
+) -> tuple[np.ndarray, float | None]:
+    """Pick the first opacity threshold that leaves enough points.
+
+    Returns ``(mask, threshold_used)`` where ``threshold_used`` is ``None`` when
+    the all-points fallback fired, so the caller can record it.
+    """
+    opacities = np.asarray(opacities, dtype=np.float32).reshape(-1)
+    for threshold in thresholds:
+        mask = opacities > threshold
+        if int(mask.sum()) >= min_points:
+            return mask, float(threshold)
+    return np.ones_like(opacities, dtype=bool), None
+
+
 class LGMEngine(AbstractEngine):
     def __init__(
         self,
@@ -53,6 +78,8 @@ class LGMEngine(AbstractEngine):
         mv_num_inference_steps: int = 30,
         elevation: float = 0.0,
         big: bool = True,
+        opacity_thresholds: tuple = DEFAULT_OPACITY_THRESHOLDS,
+        min_foreground_points: int = DEFAULT_MIN_FOREGROUND_POINTS,
     ):
         self.device = device
         self.mv_guidance_scale = mv_guidance_scale
@@ -61,6 +88,11 @@ class LGMEngine(AbstractEngine):
         # ENG-43: `big` moved here so load_model() matches the abstract
         # signature the runner calls uniformly.
         self.big = big
+        # ENG-17: configurable opacity thresholds (defaults preserve the
+        # published numbers).
+        self.opacity_thresholds = tuple(opacity_thresholds)
+        self.min_foreground_points = int(min_foreground_points)
+        self.last_opacity_threshold = None
         self.model = None
         self.mv_pipeline = None
         self.rays_embeddings = None
@@ -271,6 +303,7 @@ class LGMEngine(AbstractEngine):
                 "latency_mv_s": round(t_mv - t0, 3),
                 "latency_unet_s": round(t_unet - t_mv, 3),
                 "gaussian_count": len(pos),
+                "opacity_threshold_used": self.last_opacity_threshold,
                 "vertex_count": len(mesh_out.vertices) if mesh_out is not None else 0,
                 "face_count": len(mesh_out.faces) if mesh_out is not None else 0,
                 "has_vertex_colors": (mesh_out is not None and mesh_out.vertex_colors is not None),
@@ -290,13 +323,18 @@ class LGMEngine(AbstractEngine):
             opa_all = np.asarray(gaussians.opacities, dtype=np.float32).reshape(-1)
             rgb_all = np.clip(np.asarray(gaussians.sh_coeffs, dtype=np.float32), 0.0, 1.0)
 
-            valid = opa_all > 0.10
-            if valid.sum() < 200:
-                valid = opa_all > 0.08
-            if valid.sum() < 100:
-                valid = opa_all > 0.03
-            if valid.sum() < 50:
-                valid = np.ones_like(opa_all, dtype=bool)
+            # ENG-17: these thresholds were hardcoded, so an object with an
+            # unusual opacity distribution could land on a very different
+            # foreground set from run to run. They are configurable, default to
+            # the values that produced the published numbers, and the branch
+            # that fired is recorded in the metadata.
+            valid, opacity_threshold_used = _select_foreground(
+                opa_all,
+                min_points=self.min_foreground_points,
+                thresholds=self.opacity_thresholds,
+            )
+            # ENG-17: record which branch fired so predict() can report it.
+            self.last_opacity_threshold = opacity_threshold_used
 
             pos_fg = pos_all[valid]
             opa_fg = opa_all[valid]
