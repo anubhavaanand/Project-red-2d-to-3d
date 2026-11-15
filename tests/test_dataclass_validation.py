@@ -7,10 +7,10 @@ from src.engines.base import GaussianCloud, Mesh3D
 
 
 def _mesh(**kw):
-    base = dict(
-        vertices=np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]], dtype=np.float32),
-        faces=np.array([[0, 1, 2], [0, 1, 3]], dtype=np.int64),
-    )
+    base = {
+        "vertices": np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]], dtype=np.float32),
+        "faces": np.array([[0, 1, 2], [0, 1, 3]], dtype=np.int64),
+    }
     base.update(kw)
     return Mesh3D(**base)
 
@@ -100,15 +100,20 @@ class TestWiredIntoEngines:
         from pathlib import Path
 
         base = Path(__file__).parent.parent / "src" / "engines"
-        for f in ("triposr_engine.py", "sf3d_engine.py", "spar3d_engine.py",
-                  "trellis_engine.py", "lgm_engine.py"):
+        for f in (
+            "triposr_engine.py",
+            "sf3d_engine.py",
+            "spar3d_engine.py",
+            "trellis_engine.py",
+            "lgm_engine.py",
+        ):
             assert ".validate()" in (base / f).read_text(), f"{f} does not validate"
 
     def test_validate_is_not_post_init(self):
         """ENG-42 asks for an explicit validate(); __post_init__ would run on
         every construction and could break callers that build partial meshes."""
-        from pathlib import Path
         import ast
+        from pathlib import Path
 
         src = (Path(__file__).parent.parent / "src" / "engines" / "base.py").read_text()
         tree = ast.parse(src)

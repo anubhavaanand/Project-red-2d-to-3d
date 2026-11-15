@@ -98,12 +98,13 @@ class TestPredictFormatHandling:
     def test_lgm_passes_extract_mesh(self):
         """LGM must be told which artefact to build."""
         src = SERVER_PY.read_text()
-        assert "engine.predict(image, want_mesh)" in src
+        assert "return _e.predict(_img, _m)" in src
+        assert 'want_mesh = requested_format != "gaussians"' in src
 
     def test_gaussian_request_is_preferred_over_mesh(self):
         """A gaussians request must not be silently served as .glb."""
         src = SERVER_PY.read_text()
-        assert "want_gaussians = requested_format == \"gaussians\"" in src
+        assert 'want_gaussians = requested_format == "gaussians"' in src
         # the gaussians branch must come before the mesh branch
         assert src.index("if want_gaussians and result.gaussians is not None") < src.index(
             "if result.mesh is not None"

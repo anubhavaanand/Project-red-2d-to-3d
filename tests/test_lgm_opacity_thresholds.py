@@ -12,9 +12,7 @@ ENGINE = Path(__file__).parent.parent / "src" / "engines" / "lgm_engine.py"
 def _select():
     tree = ast.parse(ENGINE.read_text())
     fn = next(
-        n
-        for n in tree.body
-        if isinstance(n, ast.FunctionDef) and n.name == "_select_foreground"
+        n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "_select_foreground"
     )
     ns = {
         "np": np,

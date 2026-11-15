@@ -6,18 +6,18 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any
 
 import numpy as np
 import torch
 from PIL import Image
 
-from .base import AbstractEngine, ReconstructionResult, Mesh3D
 from ._compat import spar3d_compat_shims
-from ._paths import extend_sys_path
-from ._memory import free_cuda_cache
 from ._mask import alpha_is_usable, derive_foreground_mask
+from ._memory import free_cuda_cache
 from ._outputs import EngineOutputError, extract_mesh_object
+from ._paths import extend_sys_path
+from .base import AbstractEngine, Mesh3D, ReconstructionResult
 
 
 class Spar3dOutputError(EngineOutputError):
@@ -112,9 +112,7 @@ def _apply_foreground_crop(engine, image):
     """
     try:
         return (
-            engine._foreground_crop(
-                image, crop_ratio=engine.foreground_ratio, newsize=(512, 512)
-            ),
+            engine._foreground_crop(image, crop_ratio=engine.foreground_ratio, newsize=(512, 512)),
             None,
         )
     except Exception as crop_err:
@@ -187,9 +185,14 @@ class Spar3dEngine(AbstractEngine):
             except Exception as e:
                 # SECURITY: Only fall back to mirror if explicitly allowed
                 import os
+
                 if os.environ.get("SPAR3D_ALLOW_MIRROR", "0") == "1":
-                    print(f"[SPAR3D] WARNING: Primary repo failed ({e}). Falling back to third-party mirror (zimengxiong/Modelr-SPAR3D)")
-                    print("[SPAR3D] WARNING: Third-party code will be executed. Set SPAR3D_ALLOW_MIRROR=0 to disable.")
+                    print(
+                        f"[SPAR3D] WARNING: Primary repo failed ({e}). Falling back to third-party mirror (zimengxiong/Modelr-SPAR3D)"
+                    )
+                    print(
+                        "[SPAR3D] WARNING: Third-party code will be executed. Set SPAR3D_ALLOW_MIRROR=0 to disable."
+                    )
                     self.model = SPAR3D.from_pretrained(
                         "zimengxiong/Modelr-SPAR3D",
                         config_name="config.yaml",
@@ -231,8 +234,12 @@ class Spar3dEngine(AbstractEngine):
                 if rgb is None:
                     return None
                 h, w = rgb.shape[:2]
-                u = np.clip(np.nan_to_num(np.asarray(uv[:, 0], dtype=np.float64), nan=0.5), 0.0, 1.0)
-                v = np.clip(np.nan_to_num(np.asarray(uv[:, 1], dtype=np.float64), nan=0.5), 0.0, 1.0)
+                u = np.clip(
+                    np.nan_to_num(np.asarray(uv[:, 0], dtype=np.float64), nan=0.5), 0.0, 1.0
+                )
+                v = np.clip(
+                    np.nan_to_num(np.asarray(uv[:, 1], dtype=np.float64), nan=0.5), 0.0, 1.0
+                )
                 # SPAR3D's baker_kernel.cu writes UV v = 1.0 - row/height (OpenGL bottom-left origin).
                 # Bilinearly sample at x = u * (w - 1), y = (1.0 - v) * (h - 1).
                 fx = u * (w - 1)
@@ -248,8 +255,7 @@ class Spar3dEngine(AbstractEngine):
                 c01 = rgb[y1, x0]
                 c11 = rgb[y1, x1]
                 vcols = np.clip(
-                    (1.0 - wy) * ((1.0 - wx) * c00 + wx * c10)
-                    + wy * ((1.0 - wx) * c01 + wx * c11),
+                    (1.0 - wy) * ((1.0 - wx) * c00 + wx * c10) + wy * ((1.0 - wx) * c01 + wx * c11),
                     0.0,
                     1.0,
                 ).astype(np.float32)
@@ -363,7 +369,7 @@ class Spar3dEngine(AbstractEngine):
             },
         )
 
-    def get_engine_info(self) -> Dict[str, Any]:
+    def get_engine_info(self) -> dict[str, Any]:
         return {
             "name": "SPAR3D",
             "paper": "arXiv:2501.04689",

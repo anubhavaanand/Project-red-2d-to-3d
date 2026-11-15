@@ -178,7 +178,9 @@ class TestSpar3dShimScope:
         monkeypatch.setitem(sys.modules, "transformers.modeling_utils", modeling_utils)
         return tpu, PreTrainedModel
 
-    def test_transformers_patches_are_reverted(self, stub_torch, stub_transparent_background, fake_transformers):
+    def test_transformers_patches_are_reverted(
+        self, stub_torch, stub_transparent_background, fake_transformers
+    ):
         from src.engines._compat import spar3d_compat_shims
 
         tpu, PreTrainedModel = fake_transformers
@@ -193,7 +195,9 @@ class TestSpar3dShimScope:
         assert not hasattr(tpu, "prune_linear_layer")
         assert not hasattr(PreTrainedModel, "get_head_mask")
 
-    def test_existing_helpers_are_not_overwritten(self, stub_torch, stub_transparent_background, fake_transformers):
+    def test_existing_helpers_are_not_overwritten(
+        self, stub_torch, stub_transparent_background, fake_transformers
+    ):
         from src.engines._compat import spar3d_compat_shims
 
         tpu, _ = fake_transformers
@@ -206,7 +210,9 @@ class TestSpar3dShimScope:
             assert tpu.find_pruneable_heads_and_indices is sentinel
         assert tpu.find_pruneable_heads_and_indices is sentinel
 
-    def test_fabricated_pkg_resources_is_removed(self, monkeypatch, stub_torch, stub_transparent_background):
+    def test_fabricated_pkg_resources_is_removed(
+        self, monkeypatch, stub_torch, stub_transparent_background
+    ):
         from src.engines._compat import spar3d_compat_shims
 
         monkeypatch.delitem(sys.modules, "pkg_resources", raising=False)
@@ -224,7 +230,9 @@ class TestSpar3dShimScope:
             assert hasattr(fake, "packaging")
         assert sys.modules.get("pkg_resources") is None
 
-    def test_shims_removed_even_on_exception(self, stub_torch, stub_transparent_background, fake_transformers):
+    def test_shims_removed_even_on_exception(
+        self, stub_torch, stub_transparent_background, fake_transformers
+    ):
         from src.engines._compat import spar3d_compat_shims
 
         tpu, PreTrainedModel = fake_transformers

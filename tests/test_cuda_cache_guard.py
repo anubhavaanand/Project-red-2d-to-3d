@@ -66,8 +66,14 @@ class TestFreeCudaCache:
 
 class TestCallSites:
     @pytest.mark.parametrize(
-        "engine", ["triposr_engine.py", "lgm_engine.py", "trellis_engine.py",
-                   "spar3d_engine.py", "sf3d_engine.py"]
+        "engine",
+        [
+            "triposr_engine.py",
+            "lgm_engine.py",
+            "trellis_engine.py",
+            "spar3d_engine.py",
+            "sf3d_engine.py",
+        ],
     )
     def test_engine_uses_the_helper(self, engine):
         src = (ENGINES / engine).read_text()
@@ -75,21 +81,25 @@ class TestCallSites:
         assert "free_cuda_cache()" in src
 
     @pytest.mark.parametrize(
-        "engine", ["triposr_engine.py", "lgm_engine.py", "trellis_engine.py",
-                   "spar3d_engine.py", "sf3d_engine.py"]
+        "engine",
+        [
+            "triposr_engine.py",
+            "lgm_engine.py",
+            "trellis_engine.py",
+            "spar3d_engine.py",
+            "sf3d_engine.py",
+        ],
     )
     def test_no_unguarded_cuda_call_remains(self, engine):
         """ENG-08: raw empty_cache() calls must be gone from engine code."""
         src = (ENGINES / engine).read_text()
-        code_lines = [
-            l for l in src.splitlines() if not l.lstrip().startswith("#")
-        ]
+        code_lines = [line for line in src.splitlines() if not line.lstrip().startswith("#")]
         for i, line in enumerate(code_lines):
             if line.strip() == "torch.cuda.empty_cache()":
                 prev = code_lines[i - 1].strip() if i else ""
-                assert prev.startswith(
-                    "if torch.cuda.is_available()"
-                ), f"{engine}: unguarded call -> {line.strip()!r}"
+                assert prev.startswith("if torch.cuda.is_available()"), (
+                    f"{engine}: unguarded call -> {line.strip()!r}"
+                )
 
 
 class TestSourceStructure:

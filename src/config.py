@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Tuple, List, Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -13,14 +13,14 @@ class EngineType(str, Enum):
 
 class PreprocessingConfig(BaseModel):
     background_removal_model: str = Field(default="isnet-general-use")
-    target_size: Tuple[int, int] = Field(default=(512, 512))
+    target_size: tuple[int, int] = Field(default=(512, 512))
 
 
 class EngineConfig(BaseModel):
     engine_type: EngineType = Field(default=EngineType.TRIPOSR)
     device: str = Field(default="cuda")
     dtype: str = Field(default="float16")
-    checkpoint_path: Optional[str] = Field(default=None)
+    checkpoint_path: str | None = Field(default=None)
 
 
 class ExportConfig(BaseModel):
@@ -30,7 +30,7 @@ class ExportConfig(BaseModel):
 
 class BenchmarkConfig(BaseModel):
     dataset_path: str = Field(default="./data/gso")
-    metrics: List[str] = Field(
+    metrics: list[str] = Field(
         default_factory=lambda: ["chamfer_distance", "f_score", "psnr", "lpips"]
     )
     num_samples: int = Field(default=100)

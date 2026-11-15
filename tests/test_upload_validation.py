@@ -23,7 +23,14 @@ def validate_upload():
         n
         for n in tree.body
         if (isinstance(n, ast.FunctionDef) and n.name in wanted)
-        or (isinstance(n, ast.Assign) and any(getattr(t, "id", "") in {"MAX_IMAGE_PIXELS", "ALLOWED_IMAGE_MODES", "ALLOWED_IMAGE_FORMATS"} for t in n.targets))
+        or (
+            isinstance(n, ast.Assign)
+            and any(
+                getattr(t, "id", "")
+                in {"MAX_IMAGE_PIXELS", "ALLOWED_IMAGE_MODES", "ALLOWED_IMAGE_FORMATS"}
+                for t in n.targets
+            )
+        )
     ]
     module = ast.Module(body=nodes, type_ignores=[])
     namespace = {"Image": Image}

@@ -8,7 +8,7 @@ APP_PY = Path(__file__).parent.parent / "app.py"
 
 def _output_naming_source():
     lines = APP_PY.read_text().splitlines()
-    start = next(i for i, l in enumerate(lines) if "out_file = OUTPUT_DIR" in l)
+    start = next(i for i, line in enumerate(lines) if "out_file = OUTPUT_DIR" in line)
     return "\n".join(lines[start : start + 3])
 
 
@@ -21,10 +21,7 @@ class TestOutputFilename:
     def test_uuid_is_imported(self):
         tree = ast.parse(APP_PY.read_text())
         imported = {
-            a.asname or a.name
-            for n in ast.walk(tree)
-            if isinstance(n, ast.Import)
-            for a in n.names
+            a.asname or a.name for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names
         }
         assert "uuid" in imported
 

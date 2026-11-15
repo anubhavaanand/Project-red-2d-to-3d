@@ -51,9 +51,7 @@ class TestStrictForwarding:
         wrapper = _remap_source()
         assert "strict=strict" in wrapper
         # the forwarded call must not pin strict to a literal
-        call = next(
-            line for line in wrapper.splitlines() if "_orig_load_state_dict(" in line
-        )
+        call = next(line for line in wrapper.splitlines() if "_orig_load_state_dict(" in line)
         assert "strict=strict" in call
         assert "strict=False" not in call
 

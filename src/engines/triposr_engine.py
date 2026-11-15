@@ -7,15 +7,15 @@ from __future__ import annotations
 import re
 import time
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any
 
 import numpy as np
 from PIL import Image
 
-from .base import AbstractEngine, ReconstructionResult, Mesh3D
-from ._paths import extend_sys_path
-from ._memory import free_cuda_cache
 from ._mask import alpha_is_usable, derive_foreground_mask
+from ._memory import free_cuda_cache
+from ._paths import extend_sys_path
+from .base import AbstractEngine, Mesh3D, ReconstructionResult
 
 
 def _skimage_mc_func(level, iso=0.0):
@@ -80,8 +80,7 @@ def _remap_vit_checkpoint_keys(state_dict, model):
     model_sd = model.state_dict()
     model_keys = set(model_sd.keys())
     unmatched = [
-        k for k in state_dict
-        if k not in model_keys and k.startswith("image_tokenizer.model.")
+        k for k in state_dict if k not in model_keys and k.startswith("image_tokenizer.model.")
     ]
     if not unmatched:
         return state_dict  # already current naming (transformers 4.x) — no-op
@@ -92,7 +91,7 @@ def _remap_vit_checkpoint_keys(state_dict, model):
         if k in model_keys or not k.startswith("image_tokenizer.model."):
             out[k] = v
             continue
-        sub = k[len("image_tokenizer.model."):]
+        sub = k[len("image_tokenizer.model.") :]
         for pat, repl in rules:
             cand = pat.sub(repl, sub)
             if cand != sub:
@@ -181,13 +180,15 @@ class TriposrEngine(AbstractEngine):
         tsr_iso.marching_cubes = _skimage_mc_func
 
         # SECURITY: Only wrap load_state_dict once to prevent nested wrapping
-        if not hasattr(TSR, '_state_dict_wrapped'):
+        if not hasattr(TSR, "_state_dict_wrapped"):
             _orig_load_state_dict = TSR.load_state_dict
+
             def _remap_load_state_dict(self_model, state_dict, strict=False, **kwargs):
                 state_dict = _remap_vit_checkpoint_keys(state_dict, self_model)
                 # ENG-02: forward the caller's `strict` — hardcoding False meant
                 # a caller asking for strict loading could never detect missing keys.
                 return _orig_load_state_dict(self_model, state_dict, strict=strict, **kwargs)
+
             TSR.load_state_dict = _remap_load_state_dict
             TSR._state_dict_wrapped = True
 
@@ -234,22 +235,13 @@ class TriposrEngine(AbstractEngine):
             for idx, (off, w) in enumerate(zip(offsets, base_weights)):
                 pts = np.clip(verts + off * normals, -radius, radius)
                 pts_t = torch.from_numpy(pts).float().to(self.device)
-                queried = self.model.renderer.query_triplane(
-                    self.model.decoder, pts_t, scene_code
-                )
+                queried = self.model.renderer.query_triplane(self.model.decoder, pts_t, scene_code)
                 c = np.clip(
                     queried["color"].detach().cpu().numpy().astype(np.float32),
                     0.0,
                     1.0,
                 )
-                d = (
-                    queried["density_act"]
-                    .detach()
-                    .cpu()
-                    .numpy()
-                    .astype(np.float32)
-                    .reshape(-1, 1)
-                )
+                d = queried["density_act"].detach().cpu().numpy().astype(np.float32).reshape(-1, 1)
                 if idx == 0:
                     surf_density = d
                     eff_w = np.full((len(verts), 1), w, dtype=np.float32)
@@ -292,9 +284,7 @@ class TriposrEngine(AbstractEngine):
             scene_codes = self.model([image_input], device=self.device)
             self.model.set_marching_cubes_resolution(self.resolution)
             self.model.isosurface_helper.mc_func = _skimage_mc_func
-            meshes = self.model.extract_mesh(
-                scene_codes, True, resolution=self.resolution
-            )
+            meshes = self.model.extract_mesh(scene_codes, True, resolution=self.resolution)
 
         mesh_obj = meshes[0]
         # ENG-06: the signed volume was taken about the world origin, which is
@@ -343,7 +333,7 @@ class TriposrEngine(AbstractEngine):
             },
         )
 
-    def get_engine_info(self) -> Dict[str, Any]:
+    def get_engine_info(self) -> dict[str, Any]:
         return {
             "name": "TripoSR",
             "paper": "arXiv:2403.02151",

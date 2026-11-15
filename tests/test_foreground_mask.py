@@ -72,8 +72,8 @@ class TestDeriveForegroundMask:
     def test_separate_parts_of_similar_size_are_kept(self):
         """Two blobs of comparable size are both real objects, not speckle."""
         img = np.full((128, 128, 3), 255, np.uint8)
-        img[10:50, 10:50] = 30      # 1600 px
-        img[70:110, 70:110] = 30    # 1600 px
+        img[10:50, 10:50] = 30  # 1600 px
+        img[70:110, 70:110] = 30  # 1600 px
         mask = derive_foreground_mask(img)
         assert mask.sum() == pytest.approx(3200, abs=10)
 

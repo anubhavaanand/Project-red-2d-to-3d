@@ -1,8 +1,9 @@
 """Tests for app.py import hygiene (APP-06)."""
 
 import ast
-import tomllib
 from pathlib import Path
+
+import tomllib
 
 APP_PY = Path(__file__).parent.parent / "app.py"
 PYPROJECT = Path(__file__).parent.parent / "pyproject.toml"

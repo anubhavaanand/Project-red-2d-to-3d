@@ -6,6 +6,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from src.engines._outputs import EngineOutputError
+from src.engines._outputs import extract_mesh_object as _shared_extract
+
 ENGINE = Path(__file__).parent.parent / "src" / "engines" / "spar3d_engine.py"
 
 
@@ -13,9 +16,7 @@ def _extract():
     """Compile SPAR3D's thin wrapper, backed by the real shared validator."""
     tree = ast.parse(ENGINE.read_text())
     fn = next(
-        n
-        for n in tree.body
-        if isinstance(n, ast.FunctionDef) and n.name == "_extract_mesh_object"
+        n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "_extract_mesh_object"
     )
     ns = {
         "Spar3dOutputError": EngineOutputError,
@@ -23,9 +24,6 @@ def _extract():
     }
     exec(compile(ast.Module(body=[fn], type_ignores=[]), str(ENGINE), "exec"), ns)
     return ns["_extract_mesh_object"], EngineOutputError
-
-
-from src.engines._outputs import EngineOutputError, extract_mesh_object as _shared_extract
 
 
 class _Mesh:
@@ -102,4 +100,7 @@ class TestSourceContract:
         """Both engines unpack (mesh, aux) — pins the real contract."""
         for name in ("spar3d_engine.py", "sf3d_engine.py"):
             src = (ENGINE.parent / name).read_text()
-            assert "mesh_out, _ = self.model.run_image(" in src or "mesh_out, glob_dict = self.model.run_image(" in src
+            assert (
+                "mesh_out, _ = self.model.run_image(" in src
+                or "mesh_out, glob_dict = self.model.run_image(" in src
+            )

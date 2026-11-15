@@ -120,9 +120,7 @@ class TestWiring:
         import inspect
         import textwrap
 
-        src = textwrap.dedent(
-            inspect.getsource(spar3d.Spar3dEngine._extract_spar3d_vertex_colors)
-        )
+        src = textwrap.dedent(inspect.getsource(spar3d.Spar3dEngine._extract_spar3d_vertex_colors))
         tree = ast.parse(src)
         for node in ast.walk(tree):
             if isinstance(node, ast.Call) and getattr(node.func, "attr", "") == "to_color":

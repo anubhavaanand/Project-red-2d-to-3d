@@ -17,16 +17,16 @@ import gc
 import os
 import time
 from pathlib import Path
-from typing import Dict, Any, Literal
+from typing import Any, Literal
 
 import numpy as np
 import torch
 from PIL import Image
 
-from .base import AbstractEngine, ReconstructionResult, Mesh3D, GaussianCloud
-from ._paths import extend_sys_path
-from ._memory import free_cuda_cache
 from ._mask import alpha_is_usable, derive_foreground_mask
+from ._memory import free_cuda_cache
+from ._paths import extend_sys_path
+from .base import AbstractEngine, GaussianCloud, Mesh3D, ReconstructionResult
 
 # ENG-29: TRELLIS reads these at import time, so they must be set before the
 # engine is imported — but setting them at module scope mutated global state
@@ -144,8 +144,8 @@ class TrellisEngine(AbstractEngine):
         # import that reads them, rather than mutating os.environ at module scope.
         os.environ.setdefault("SPCONV_ALGO", "native")
         os.environ.setdefault("ATTN_BACKEND", "xformers")
-        from trellis.pipelines import TrellisImageTo3DPipeline
         from huggingface_hub import snapshot_download
+        from trellis.pipelines import TrellisImageTo3DPipeline
 
         print("[TRELLIS] Fetching microsoft/TRELLIS-image-large snapshot …")
         local_dir = snapshot_download(
@@ -190,8 +190,7 @@ class TrellisEngine(AbstractEngine):
         # the wrong artefact. Reject it explicitly.
         if decode_mode not in ("mesh", "gaussian"):
             raise TrellisOutputError(
-                f"output_format={decode_mode!r} is not implemented; "
-                "use 'mesh' or 'gaussian'"
+                f"output_format={decode_mode!r} is not implemented; use 'mesh' or 'gaussian'"
             )
 
         if self.staged_offload and self.output_format == "mesh":
@@ -316,9 +315,7 @@ class TrellisEngine(AbstractEngine):
                 try:
                     # ENG-23: detect the decoder's colour range instead of
                     # assuming [0, 1], and record what was found.
-                    vcols, color_range = _normalize_vertex_colors(
-                        attrs.detach().cpu().numpy()
-                    )
+                    vcols, color_range = _normalize_vertex_colors(attrs.detach().cpu().numpy())
                     metadata["vertex_color_range"] = color_range
                 except Exception as ce:
                     print(f"[TRELLIS] vertex color warning: {ce}")
@@ -332,7 +329,6 @@ class TrellisEngine(AbstractEngine):
                     gs0 = out_gs_color[0]
                     gs_xyz = gs0.get_xyz.detach().cpu().numpy().astype(np.float32)
                     gs_opa = gs0.get_opacity.detach().cpu().numpy().astype(np.float32).reshape(-1)
-                    sh_c0 = 0.28209479177387814
                     # Store raw SH DC (consistent with PLY exporter convention)
                     gs_rgb = np.clip(
                         gs0._features_dc.detach().cpu().numpy().astype(np.float32)[:, 0, :3],
@@ -348,7 +344,7 @@ class TrellisEngine(AbstractEngine):
                     if k == 1 or idx.ndim == 1:
                         gs_vcols = gs_rgb[idx]
                     else:
-                        w = (gs_opa[idx] ** 2) / (dists ** 2 + 1e-6)
+                        w = (gs_opa[idx] ** 2) / (dists**2 + 1e-6)
                         w /= w.sum(axis=1, keepdims=True)
                         gs_vcols = (gs_rgb[idx] * w[..., None]).sum(axis=1).astype(np.float32)
                     vcols = np.clip(gs_vcols, 0.0, 1.0).astype(np.float32)
@@ -356,17 +352,21 @@ class TrellisEngine(AbstractEngine):
                     print(f"[TRELLIS] GS color transfer warning: {gce}")
 
             # Convert Blender Z-up (x, y, z) -> OpenGL Y-up (x, z, -y) via Rx(-90)
-            rx_neg90 = np.array([[1.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, -1.0, 0.0]], dtype=np.float32)
+            rx_neg90 = np.array(
+                [[1.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, -1.0, 0.0]], dtype=np.float32
+            )
             verts = verts_raw @ rx_neg90.T
 
             mesh = Mesh3D(vertices=verts, faces=faces, vertex_colors=vcols)
             # ENG-42: validate at the source rather than in export/rendering.
             mesh.validate()
-            metadata.update({
-                "vertex_count": len(mesh.vertices),
-                "face_count": len(mesh.faces),
-                "has_vertex_colors": vcols is not None,
-            })
+            metadata.update(
+                {
+                    "vertex_count": len(mesh.vertices),
+                    "face_count": len(mesh.faces),
+                    "has_vertex_colors": vcols is not None,
+                }
+            )
             free_cuda_cache()
             gc.collect()
             return ReconstructionResult(mesh=mesh, metadata=metadata)
@@ -396,7 +396,7 @@ class TrellisEngine(AbstractEngine):
             torch.cuda.empty_cache()
             torch.cuda.ipc_collect()
 
-    def get_engine_info(self) -> Dict[str, Any]:
+    def get_engine_info(self) -> dict[str, Any]:
         return {
             "name": "TRELLIS",
             "paper": "arXiv:2412.01506",

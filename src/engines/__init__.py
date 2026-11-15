@@ -1,9 +1,9 @@
 """Engines module with lazy imports to avoid heavyweight engine loads at import time."""
 
 import importlib
-from typing import Any, Dict
+from typing import Any
 
-from .base import AbstractEngine, Mesh3D, GaussianCloud, ReconstructionResult
+from .base import AbstractEngine, GaussianCloud, Mesh3D, ReconstructionResult
 
 __all__ = [
     "AbstractEngine",
@@ -19,7 +19,7 @@ __all__ = [
 
 # ENG-44: name -> (module, attribute). Resolved classes are cached so repeated
 # attribute access does not re-import, and every access returns the same object.
-_LAZY: Dict[str, tuple] = {
+_LAZY: dict[str, tuple] = {
     "TriposrEngine": ("triposr_engine", "TriposrEngine"),
     "LGMEngine": ("lgm_engine", "LGMEngine"),
     "TrellisEngine": ("trellis_engine", "TrellisEngine"),
@@ -27,7 +27,7 @@ _LAZY: Dict[str, tuple] = {
     "SF3DEngine": ("sf3d_engine", "SF3DEngine"),
 }
 
-_cache: Dict[str, Any] = {}
+_cache: dict[str, Any] = {}
 
 
 def __getattr__(name: str) -> Any:

@@ -67,9 +67,7 @@ class TestSignedVolumeAbout:
         not translation invariant — move it and the sign can change.
         """
         vol, _ = _helpers()
-        sheet = np.array(
-            [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]], dtype=np.float64
-        )
+        sheet = np.array([[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]], dtype=np.float64)
         faces = np.array([[0, 1, 2], [0, 2, 3]], dtype=np.int64)
 
         near = vol(sheet, faces, np.zeros(3))
@@ -78,9 +76,7 @@ class TestSignedVolumeAbout:
 
         # while the centroid form is stable for the same sheet
         c = sheet.mean(axis=0)
-        assert vol(sheet, faces, c) == pytest.approx(
-            vol(sheet + 100.0, faces, c + 100.0), rel=1e-6
-        )
+        assert vol(sheet, faces, c) == pytest.approx(vol(sheet + 100.0, faces, c + 100.0), rel=1e-6)
 
     def test_watertight_mesh_is_translation_invariant_either_way(self, sphere):
         """Documents why the old code usually worked: closed meshes are fine."""
@@ -136,7 +132,9 @@ class TestSourceContract:
 
     def test_bare_except_pass_is_gone(self):
         src = ENGINE.read_text()
-        orient_call = src[src.index("_orient_outward(mesh_obj)") : src.index("vertex_colors = None")]
+        orient_call = src[
+            src.index("_orient_outward(mesh_obj)") : src.index("vertex_colors = None")
+        ]
         assert "except Exception:\n            pass" not in orient_call
 
     def test_engine_parses(self):

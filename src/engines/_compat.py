@@ -17,8 +17,8 @@ import importlib.machinery
 import importlib.util
 import sys
 import types
+from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Iterator
 
 _MISSING = object()
 
@@ -52,11 +52,15 @@ def lgm_xformers_shim() -> Iterator[None]:
                 "Use dense boolean masks instead."
             )
         if q.ndim == 3:
-            return F.scaled_dot_product_attention(q.unsqueeze(1), k.unsqueeze(1), v.unsqueeze(1)).squeeze(1)
+            return F.scaled_dot_product_attention(
+                q.unsqueeze(1), k.unsqueeze(1), v.unsqueeze(1)
+            ).squeeze(1)
         # xformers 4D tensors are (B, N, H, D); PyTorch SDPA wants (B, H, N, D)
-        return F.scaled_dot_product_attention(
-            q.transpose(1, 2), k.transpose(1, 2), v.transpose(1, 2)
-        ).transpose(1, 2).contiguous()
+        return (
+            F.scaled_dot_product_attention(q.transpose(1, 2), k.transpose(1, 2), v.transpose(1, 2))
+            .transpose(1, 2)
+            .contiguous()
+        )
 
     def _unbind(tensor, dim: int = 0):
         return torch.unbind(tensor, dim=dim)
@@ -120,7 +124,9 @@ def spar3d_compat_shims() -> Iterator[None]:
 
             if not hasattr(tpu, "find_pruneable_heads_and_indices"):
 
-                def _find_pruneable_heads_and_indices(heads, n_heads, head_size, already_pruned_heads):
+                def _find_pruneable_heads_and_indices(
+                    heads, n_heads, head_size, already_pruned_heads
+                ):
                     heads = set(heads) - already_pruned_heads
                     mask = torch.ones(n_heads, head_size)
                     for head in heads:
@@ -138,7 +144,11 @@ def spar3d_compat_shims() -> Iterator[None]:
                     index = index.to(layer.weight.device)
                     weight = layer.weight.index_select(dim, index).clone().detach()
                     bias = (
-                        (layer.bias.clone().detach() if dim == 1 else layer.bias[index].clone().detach())
+                        (
+                            layer.bias.clone().detach()
+                            if dim == 1
+                            else layer.bias[index].clone().detach()
+                        )
                         if layer.bias is not None
                         else None
                     )
