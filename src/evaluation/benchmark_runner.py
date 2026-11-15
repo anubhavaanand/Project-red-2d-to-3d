@@ -48,6 +48,10 @@ class GSOSample:
     gt_colors: np.ndarray | None = None
 
 
+class EmptyAlignmentError(RuntimeError):
+    """EVAL-14: raised when alignment cannot run because an input is empty."""
+
+
 def _srgb_encode_u8(rgb: np.ndarray) -> np.ndarray:
     """Encode linear-light RGB bytes to sRGB.
 
@@ -374,6 +378,13 @@ def align_mesh_to_gt(
         pred_cols = vc[mesh.faces[pred_face_idx]].mean(axis=1).astype(np.float32)
 
     gt = np.asarray(gt_points, dtype=np.float32)
+    # EVAL-14: an empty prediction or GT makes sub_n == 0, and cKDTree raises
+    # on an empty array. Surface it as a typed failure the runner can record,
+    # instead of an unhandled exception mid-run.
+    if len(pred_pts) == 0 or len(gt) == 0:
+        raise EmptyAlignmentError(
+            f"cannot align: empty input (pred_pts={len(pred_pts)}, gt={len(gt)})"
+        )
     sub_n = min(2048, len(pred_pts), len(gt))
     rng = np.random.default_rng(0)
     p_idx = rng.choice(len(pred_pts), sub_n, replace=False)
