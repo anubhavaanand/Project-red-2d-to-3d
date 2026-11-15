@@ -300,17 +300,23 @@ class LGMEngine(AbstractEngine):
 
             nonzero = grid_np[grid_np > 1e-4]
             if len(nonzero) == 0:
+                print("[LGM] WARNING: No foreground gaussians found, returning None")
                 return None
             iso = float(np.percentile(nonzero, 48))
 
             # Always use skimage.measure.marching_cubes on CPU grid_np so vertex
             # coordinates stay in (ix, iy, iz) = (x, y, z) order without axis reversal!
             # Reverse face winding because grid_np has high opacity inside and low outside.
-            verts, faces, _, _ = measure.marching_cubes(grid_np, iso)
+            try:
+                verts, faces, _, _ = measure.marching_cubes(grid_np, iso)
+            except Exception as e:
+                print(f"[LGM] WARNING: Marching cubes failed: {e}")
+                return None
             verts = verts.astype(np.float32)
             faces = np.ascontiguousarray(faces[:, [0, 2, 1]], dtype=np.int64)
 
             if len(verts) == 0 or len(faces) == 0:
+                print("[LGM] WARNING: Marching cubes produced empty mesh")
                 return None
 
             verts = (verts / (resolution - 1) * 2.0 - 1.0) * pos_scale.numpy() + pos_center.numpy()
