@@ -112,6 +112,10 @@ def generate_3d(
     if image is None:
         return None, "⚠️ Please upload an image first.", None
 
+    # SECURITY: Validate image dimensions to prevent decompression bombs
+    if image.width > 4096 or image.height > 4096:
+        return None, "❌ Image too large (max 4096x4096)", None
+
     try:
         t0 = time.time()
 
@@ -168,8 +172,7 @@ def generate_3d(
             return None, "❌ Engine returned no output.", None
 
     except Exception as exc:
-        tb = traceback.format_exc()
-        return None, f"❌ Error: {exc}\n\n{tb}", None
+        return None, f"❌ Error: {type(exc).__name__}: {exc}", None
 
 
 def _render_preview(mesh) -> Image.Image | None:

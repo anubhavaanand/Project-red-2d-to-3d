@@ -82,7 +82,18 @@ async def predict(
 
     try:
         contents = await file.read()
-        image = Image.open(io.BytesIO(contents)).convert("RGB")
+        
+        # SECURITY: Validate image size to prevent decompression bombs
+        if len(contents) > 10 * 1024 * 1024:  # 10 MB limit
+            raise HTTPException(status_code=413, detail="Image too large (max 10 MB)")
+        
+        image = Image.open(io.BytesIO(contents))
+        
+        # SECURITY: Validate image dimensions to prevent decompression bombs
+        if image.width > 4096 or image.height > 4096:
+            raise HTTPException(status_code=413, detail="Image dimensions too large (max 4096x4096)")
+        
+        image = image.convert("RGB")
 
         result = engine.predict(image)
 
@@ -100,5 +111,5 @@ async def predict(
             raise HTTPException(status_code=500, detail="Engine returned neither mesh nor gaussians.")
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
