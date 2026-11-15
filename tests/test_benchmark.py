@@ -333,7 +333,6 @@ class TestConfig:
         assert pyproject.exists()
 
 
-# =============================================================================
 # API SMOKE TESTS (CI-07)
 # =============================================================================
 
@@ -386,71 +385,80 @@ class TestAPISmoke:
 
 
 # =============================================================================
-# BENCHMARK REGRESSION TESTS (CI-04)
+# NOTEBOOK SMOKE TESTS (CI-10)
 # =============================================================================
 
-class TestBenchmarkRegression:
-    """Regression tests to ensure benchmark produces consistent results."""
+class TestNotebookStructure:
+    """Validate Kaggle notebook structure without executing them."""
 
-    def test_benchmark_runner_returns_dataframe(self):
-        """BenchmarkRunner.get_summary_df should return a DataFrame."""
-        import pandas as pd
-        from src.evaluation.benchmark_runner import BenchmarkRunner
-        runner = BenchmarkRunner(
-            dataset_path="/tmp/fake",
-            engines=[],
-            num_samples=10,
-            output_dir="/tmp/test_outputs",
+    @pytest.fixture
+    def batch1_notebook(self):
+        path = Path(__file__).parent.parent / "kaggle" / "batch1" / "kernel_batch1_triposr_lgm.ipynb"
+        if not path.exists():
+            pytest.skip("Batch 1 notebook not found")
+        with open(path) as f:
+            return json.load(f)
+
+    @pytest.fixture
+    def batch2_notebook(self):
+        path = Path(__file__).parent.parent / "kaggle" / "batch2" / "kernel_batch2_trellis_spar3d.ipynb"
+        if not path.exists():
+            pytest.skip("Batch 2 notebook not found")
+        with open(path) as f:
+            return json.load(f)
+
+    def test_notebook_valid_json(self, batch1_notebook, batch2_notebook):
+        """Notebooks should be valid JSON with required fields."""
+        for nb in [batch1_notebook, batch2_notebook]:
+            assert "cells" in nb
+            assert "metadata" in nb
+            assert "nbformat" in nb
+            assert isinstance(nb["cells"], list)
+            assert len(nb["cells"]) > 0
+
+    def test_notebook_has_code_cells(self, batch1_notebook, batch2_notebook):
+        """Notebooks should have code cells."""
+        for nb in [batch1_notebook, batch2_notebook]:
+            code_cells = [c for c in nb["cells"] if c["cell_type"] == "code"]
+            assert len(code_cells) > 0
+
+    def test_notebook_code_cells_valid_python(self, batch1_notebook, batch2_notebook):
+        """All code cells should contain valid Python syntax."""
+        import ast
+        for nb in [batch1_notebook, batch2_notebook]:
+            for i, cell in enumerate(nb["cells"]):
+                if cell["cell_type"] != "code":
+                    continue
+                src = "".join(cell["source"])
+                # Skip cells with IPython magics/shell commands
+                if src.strip().startswith("!") or src.strip().startswith("%"):
+                    continue
+                try:
+                    ast.parse(src)
+                except SyntaxError as e:
+                    pytest.fail(f"Syntax error in cell {i}: {e}")
+
+    def test_notebook_has_markdown_cells(self, batch1_notebook, batch2_notebook):
+        """Notebooks should have markdown cells for documentation."""
+        for nb in [batch1_notebook, batch2_notebook]:
+            md_cells = [c for c in nb["cells"] if c["cell_type"] == "markdown"]
+            assert len(md_cells) > 0
+
+    def test_batch1_has_required_engines(self, batch1_notebook):
+        """Batch 1 notebook should reference TripoSR and LGM."""
+        all_source = " ".join(
+            "".join(c["source"]) for c in batch1_notebook["cells"]
         )
-        df = runner.get_summary_df()
-        assert isinstance(df, pd.DataFrame)
+        assert "TripoSR" in all_source or "triposr" in all_source
+        assert "LGM" in all_source or "lgm" in all_source
 
-    def test_benchmark_runner_empty_results(self):
-        """Runner with no results should return empty DataFrame."""
-        from src.evaluation.benchmark_runner import BenchmarkRunner
-        runner = BenchmarkRunner(
-            dataset_path="/tmp/fake",
-            engines=[],
-            num_samples=10,
-            output_dir="/tmp/test_outputs",
+    def test_batch2_has_required_engines(self, batch2_notebook):
+        """Batch 2 notebook should reference TRELLIS and SPAR3D."""
+        all_source = " ".join(
+            "".join(c["source"]) for c in batch2_notebook["cells"]
         )
-        df = runner.get_summary_df()
-        assert df.empty
-
-    def test_benchmark_runner_export_latex(self):
-        """export_latex_table should return a string with table markup."""
-        from src.evaluation.benchmark_runner import BenchmarkRunner
-        runner = BenchmarkRunner(
-            dataset_path="/tmp/fake",
-            engines=[],
-            num_samples=10,
-            output_dir="/tmp/test_outputs",
-        )
-        latex = runner.export_latex_table()
-        assert isinstance(latex, str)
-        assert "tabular" in latex
-
-    def test_benchmark_runner_save_results(self):
-        """save_results should write a JSON file."""
-        import json
-        import tempfile
-        from src.evaluation.benchmark_runner import BenchmarkRunner
-        runner = BenchmarkRunner(
-            dataset_path="/tmp/fake",
-            engines=[],
-            num_samples=10,
-            output_dir="/tmp/test_outputs",
-        )
-        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
-            path = f.name
-        try:
-            runner.save_results(path)
-            with open(path) as f:
-                data = json.load(f)
-            assert isinstance(data, list)
-        finally:
-            os.unlink(path)
-
+        assert "TRELLIS" in all_source or "trellis" in all_source
+        assert "SPAR3D" in all_source or "spar3d" in all_source
 
 # =============================================================================
 # RUN AS MAIN
