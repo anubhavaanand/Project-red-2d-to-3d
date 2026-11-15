@@ -107,26 +107,31 @@ class TestPSNR:
 class TestEngineImports:
     """Verify all engines can be imported without CUDA."""
 
+    @pytest.mark.gpu
     def test_triposr_import(self):
         from src.engines.triposr_engine import TriposrEngine
         engine = TriposrEngine(device="cpu")
         assert engine.device == "cpu"
 
+    @pytest.mark.gpu
     def test_lgm_import(self):
         from src.engines.lgm_engine import LGMEngine
         engine = LGMEngine(device="cpu")
         assert engine.device == "cpu"
 
+    @pytest.mark.gpu
     def test_trellis_import(self):
         from src.engines.trellis_engine import TrellisEngine
         engine = TrellisEngine(device="cpu")
         assert engine.device == "cpu"
 
+    @pytest.mark.gpu
     def test_spar3d_import(self):
         from src.engines.spar3d_engine import Spar3dEngine
         engine = Spar3dEngine(device="cpu")
         assert engine.device == "cpu"
 
+    @pytest.mark.gpu
     def test_lazy_init(self):
         """Engines should not load models on __init__."""
         from src.engines.triposr_engine import TriposrEngine
