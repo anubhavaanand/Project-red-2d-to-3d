@@ -1,3 +1,34 @@
+"""FastAPI server for the image-to-3D benchmark.
+
+Run it either way:
+
+    # as a module (relative imports resolve)
+    uvicorn src.api.server:app --host 127.0.0.1 --port 8000
+
+    # directly
+    python src/api/server.py
+
+API-18: the ``from ..config import ...`` statements need package context, so
+running this file as a script used to raise ImportError before anything else
+could run. The bootstrap below re-execs as a module in that case.
+"""
+
+import sys as _sys
+
+# API-18: must run before the relative imports below. When this file is
+# executed as a script, __package__ is empty and `from ..config import ...`
+# fails; re-exec as a module so both entry points work.
+if __package__ in (None, ""):
+    from pathlib import Path as _Path
+
+    _repo_root = str(_Path(__file__).resolve().parents[2])
+    if _repo_root not in _sys.path:
+        _sys.path.insert(0, _repo_root)
+    import runpy as _runpy
+
+    _runpy.run_module("src.api.server", run_name="__main__")
+    raise SystemExit(0)
+
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, Security
 from fastapi.responses import FileResponse
 from fastapi.security import APIKeyHeader
@@ -398,4 +429,14 @@ async def predict(
             status_code=500,
             detail=f"Internal server error (request_id={request_id})",
         )
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(
+        "src.api.server:app",
+        host=os.environ.get("API_HOST", "127.0.0.1"),
+        port=int(os.environ.get("API_PORT", "8000")),
+    )
 
