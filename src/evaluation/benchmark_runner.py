@@ -909,12 +909,23 @@ class BenchmarkRunner:
                         if torch.cuda.is_available()
                         else 0.0
                     )
+                    # EVAL-18: max_memory_allocated excludes the CUDA context,
+                    # allocator fragmentation and other processes, so it reads
+                    # lower than nvidia-smi. Report it alongside the reserved
+                    # figure rather than replacing it, so published numbers do
+                    # not move.
+                    vram_reserved_gb = (
+                        torch.cuda.max_memory_reserved() / (1024**3)
+                        if torch.cuda.is_available()
+                        else 0.0
+                    )
 
                     row: dict[str, Any] = {
                         "engine": engine_name,
                         "sample_id": sample.sample_id,
                         "latency_s": round(latency, 4),
                         "vram_peak_gb": round(vram_gb, 2),
+                        "vram_reserved_gb": round(vram_reserved_gb, 2),
                     }
 
                     aligned_for_render: Mesh3D | None = None
@@ -1080,6 +1091,7 @@ class BenchmarkRunner:
         numeric_cols = [
             "latency_s",
             "vram_peak_gb",
+            "vram_reserved_gb",
             "chamfer_distance",
             "f_score_0.1",
             "f_score_0.2",
