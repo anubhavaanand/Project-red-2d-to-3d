@@ -9,6 +9,7 @@ import logging
 import os
 import time
 import uuid
+from pathlib import Path
 from typing import Dict, Any
 from collections import defaultdict
 
@@ -96,6 +97,41 @@ def _cleanup_file(path: str) -> None:
     except OSError:
         # Never let cleanup failure turn a successful response into a 500.
         pass
+
+
+def _sweep_output_dir(max_age_s: float = 3600.0) -> int:
+    """Delete artefacts left behind by a request that never completed.
+
+    API-06: per-request BackgroundTask cleanup covers the normal path, but if
+    the process dies mid-response the file is orphaned. Sweep stale files on
+    startup so disk cannot grow without bound across restarts.
+
+    Returns the number of files removed.
+    """
+    now = time.time()
+    removed = 0
+    try:
+        entries = list(Path(OUTPUT_DIR).iterdir())
+    except OSError:
+        return 0
+
+    for entry in entries:
+        try:
+            if not entry.is_file():
+                continue
+            if now - entry.stat().st_mtime < max_age_s:
+                continue
+            entry.unlink()
+            removed += 1
+        except OSError:
+            # A file we cannot remove must not stop the sweep or the server.
+            continue
+    if removed:
+        logger.info("Swept %d stale artefact(s) from %s", removed, OUTPUT_DIR)
+    return removed
+
+
+_sweep_output_dir()
 
 @app.get("/health")
 def health_check():
