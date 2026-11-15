@@ -79,8 +79,18 @@ _engines: dict = {}
 _bg_remover: BackgroundRemover | None = None
 
 DEVICE = "cuda" if __import__("torch").cuda.is_available() else "cpu"
-OUTPUT_DIR = Path(tempfile.gettempdir()) / "image_to_3d_outputs"
-OUTPUT_DIR.mkdir(exist_ok=True)
+
+# SEC-27: /tmp is world-writable and the old fixed subdirectory name was
+# predictable, so any local user could read (or pre-create) generated models.
+# Use a per-user directory and restrict it to 0o700.
+OUTPUT_DIR = Path(tempfile.gettempdir()) / f"image_to_3d_outputs-{os.getuid()}"
+OUTPUT_DIR.mkdir(exist_ok=True, mode=0o700)
+try:
+    OUTPUT_DIR.chmod(0o700)
+except OSError:
+    # Some filesystems (e.g. certain mounted volumes) reject chmod; the
+    # per-user path already prevents cross-user name collisions.
+    pass
 
 
 def _get_bg_remover() -> BackgroundRemover:
@@ -116,6 +126,9 @@ def _get_engine(name: str):
 # only defence left is to bound what we accept before it reaches a model.
 MAX_IMAGE_PIXELS = 4096 * 4096  # ~16.7 MP; 4096x4096 RGBA decodes to ~67 MB
 ALLOWED_IMAGE_MODES = {"RGB", "RGBA", "L", "LA", "P"}
+# SEC-29: formats this service can handle. Checked only when Gradio preserves
+# the source format; after decoding it is usually None.
+ALLOWED_IMAGE_FORMATS = {"PNG", "JPEG", "WEBP", "BMP"}
 
 
 def validate_upload(image: Image.Image | None) -> str | None:
@@ -126,6 +139,10 @@ def validate_upload(image: Image.Image | None) -> str | None:
     """
     if image is None:
         return "⚠️ Please upload an image first."
+
+    # SEC-29: reject unsupported formats when the source format survives decode.
+    if image.format is not None and image.format.upper() not in ALLOWED_IMAGE_FORMATS:
+        return f"❌ Unsupported image format '{image.format}'."
 
     # SEC-22: reject unsupported modes rather than letting an exotic format
     # (CMYK, 16-bit, palette oddities) reach the engines.

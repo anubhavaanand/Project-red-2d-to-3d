@@ -59,6 +59,28 @@ class TestEnginesAdvertisement:
         trellis = next(e for e in _engines_payload() if e["id"] == "TRELLIS")
         assert set(trellis["supported_output_formats"]) == {"mesh", "gaussians"}
 
+    def test_spar3d_and_sf3d_are_advertised(self):
+        """API-04: both engines are in EngineType and must be served."""
+        engines = {e["id"]: e for e in _engines_payload()}
+        assert "SPAR3D" in engines
+        assert "SF3D" in engines
+        for name in ("SPAR3D", "SF3D"):
+            assert engines[name]["default_output_format"] == "mesh"
+            assert engines[name]["supported_output_formats"] == ["mesh"]
+
+    def test_all_five_engine_types_are_advertised(self):
+        """EngineType has five members; /engines must list all of them."""
+        advertised = {e["id"] for e in _engines_payload()}
+        assert advertised == {"TRIPOSR", "LGM", "TRELLIS", "SPAR3D", "SF3D"}
+
+    def test_get_engine_handles_every_engine_type(self):
+        """Every EngineType must have a construction branch in get_engine."""
+        import src.config as config
+
+        src = SERVER_PY.read_text()
+        for member in config.EngineType:
+            assert f"EngineType.{member.name}" in src, member
+
 
 class TestPredictFormatHandling:
     def test_output_format_is_a_form_field(self):
@@ -76,7 +98,7 @@ class TestPredictFormatHandling:
     def test_lgm_passes_extract_mesh(self):
         """LGM must be told which artefact to build."""
         src = SERVER_PY.read_text()
-        assert "engine.predict, image, want_mesh" in src
+        assert "engine.predict(image, want_mesh)" in src
 
     def test_gaussian_request_is_preferred_over_mesh(self):
         """A gaussians request must not be silently served as .glb."""

@@ -23,7 +23,7 @@ def validate_upload():
         n
         for n in tree.body
         if (isinstance(n, ast.FunctionDef) and n.name in wanted)
-        or (isinstance(n, ast.Assign) and any(getattr(t, "id", "") in {"MAX_IMAGE_PIXELS", "ALLOWED_IMAGE_MODES"} for t in n.targets))
+        or (isinstance(n, ast.Assign) and any(getattr(t, "id", "") in {"MAX_IMAGE_PIXELS", "ALLOWED_IMAGE_MODES", "ALLOWED_IMAGE_FORMATS"} for t in n.targets))
     ]
     module = ast.Module(body=nodes, type_ignores=[])
     namespace = {"Image": Image}
@@ -66,6 +66,24 @@ class TestValidateUpload:
     def test_exactly_at_limits_accepted(self, validate_upload):
         """The documented maximum must still work."""
         assert validate_upload(Image.new("RGB", (4096, 4096))) is None
+
+    def test_unsupported_source_format_rejected(self, validate_upload):
+        """SEC-29: a TIFF/GIF source format must be rejected when preserved."""
+        img = Image.new("RGB", (64, 64))
+        img.format = "TIFF"
+        assert "Unsupported image format" in validate_upload(img)
+
+    def test_supported_source_formats_accepted(self, validate_upload):
+        for fmt in ("PNG", "JPEG", "WEBP", "BMP", "png", "jpeg"):
+            img = Image.new("RGB", (64, 64))
+            img.format = fmt
+            assert validate_upload(img) is None, fmt
+
+    def test_format_none_is_allowed(self, validate_upload):
+        """Gradio usually drops the source format; that must not be an error."""
+        img = Image.new("RGB", (64, 64))
+        assert img.format is None
+        assert validate_upload(img) is None
 
     def test_app_py_is_importable_source(self):
         """Guard against the stray trailing line that broke app.py parsing."""
