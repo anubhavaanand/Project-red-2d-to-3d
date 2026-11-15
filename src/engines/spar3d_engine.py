@@ -73,16 +73,16 @@ def _install_spar3d_compat_shims() -> None:
     except Exception:
         pass
 
+    # SECURITY: Do not silently install a dummy transparent_background module.
+    # If the real package is missing, raise an actionable error.
     if "transparent_background" not in sys.modules:
         try:
             import transparent_background  # noqa: F401
         except ImportError:
-            tb_mod = types.ModuleType("transparent_background")
-            class _DummyRemover:
-                def __init__(self, *a, **kw): pass
-                def process(self, img, *a, **kw): return img.convert("RGBA")
-            tb_mod.Remover = _DummyRemover
-            sys.modules["transparent_background"] = tb_mod
+            raise ImportError(
+                "transparent_background is required for SPAR3D. "
+                "Install it with: pip install transparent-background"
+            )
 
 
 class Spar3dEngine(AbstractEngine):
