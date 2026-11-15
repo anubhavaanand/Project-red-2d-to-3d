@@ -43,6 +43,10 @@ def export_ply(gaussians: GaussianCloud, filepath: str) -> None:
         sh = np.asarray(gaussians.sh_coeffs, dtype=np.float32)
         if sh.ndim == 3:
             sh = sh[:, 0, :3]
+        # Convert display RGB to SH DC if needed
+        if gaussians.sh_convention == "rgb":
+            # RGB (0..1) -> SH DC: (rgb - 0.5) / 0.28209479
+            sh = (sh - 0.5) / 0.28209479177387814
     else:
         sh = np.zeros((n, 3), dtype=np.float32)
 

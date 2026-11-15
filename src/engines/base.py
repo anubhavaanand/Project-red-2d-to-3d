@@ -19,6 +19,7 @@ class GaussianCloud:
     rotations: np.ndarray
     opacities: np.ndarray
     sh_coeffs: np.ndarray
+    sh_convention: str = "sh_dc"  # "sh_dc" (raw SH DC) or "rgb" (display RGB 0..1)
 
 @dataclass
 class ReconstructionResult:
