@@ -104,20 +104,23 @@ def _find_gso_texture_image(tm, mesh_path: Optional[str | Path] = None) -> Optio
         for sr in [mp.parent, mp.parent.parent]:
             if not sr.exists():
                 continue
+            # Only accept known texture names (not arbitrary numbered views)
             for cand in (
                 list(sr.glob("texture.png"))
                 + list(sr.glob("texture.jpg"))
-                + list(sr.rglob("texture.png"))
-                + list(sr.rglob("*.png"))
-                + list(sr.rglob("*.jpg"))
+                + list(sr.glob("material.png"))
+                + list(sr.glob("material.jpg"))
+                + list(sr.glob("diffuse.png"))
+                + list(sr.glob("diffuse.jpg"))
+                + list(sr.glob("albedo.png"))
+                + list(sr.glob("albedo.jpg"))
             ):
-                if not any(k in cand.name for k in ("novel", "000", "001", "input")):
-                    try:
-                        img = Image.open(cand)
-                        img.load()
-                        break
-                    except Exception:
-                        pass
+                try:
+                    img = Image.open(cand)
+                    img.load()
+                    break
+                except Exception:
+                    pass
             if img is not None:
                 break
     return img
