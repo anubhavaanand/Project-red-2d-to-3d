@@ -54,11 +54,15 @@ class LGMEngine(AbstractEngine):
         mv_guidance_scale: float = 5.0,
         mv_num_inference_steps: int = 30,
         elevation: float = 0.0,
+        big: bool = True,
     ):
         self.device = device
         self.mv_guidance_scale = mv_guidance_scale
         self.mv_num_inference_steps = mv_num_inference_steps
         self.elevation = elevation
+        # ENG-43: `big` moved here so load_model() matches the abstract
+        # signature the runner calls uniformly.
+        self.big = big
         self.model = None
         self.mv_pipeline = None
         self.rays_embeddings = None
@@ -81,7 +85,7 @@ class LGMEngine(AbstractEngine):
                 ]
             )
 
-    def load_model(self, big: bool = True) -> None:
+    def load_model(self) -> None:
         # SEC-15: the xformers shim is scoped to this block and removed on exit,
         # so it cannot leak a fake API into unrelated imports.
         with lgm_xformers_shim():
@@ -92,7 +96,7 @@ class LGMEngine(AbstractEngine):
             from core.models import LGM
 
             print("[LGM] Loading U-Net from ashawkey/LGM …")
-            self.opt = config_defaults["big"] if big else Options()
+            self.opt = config_defaults["big"] if self.big else Options()
             self.model = LGM(self.opt)
             ckpt_path = hf_hub_download(
                 repo_id="ashawkey/LGM",
@@ -143,7 +147,7 @@ class LGMEngine(AbstractEngine):
         import kiui
 
         if self.model is None or self.mv_pipeline is None:
-            self.load_model(big=True)
+            self.load_model()
 
         # Deterministic seeds (mirrors spar3d_engine) — ImageDream multi-view
         # diffusion is stochastic without this.
