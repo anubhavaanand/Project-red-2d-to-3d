@@ -47,6 +47,7 @@ Two-sided paired Wilcoxon signed-rank tests over the 100 shared objects:
 - **Rendering** — one novel view at 65° azimuth / 15° elevation, rendered at 2× and Lanczos-downsampled to 256², under three-point studio lighting (ambient 0.45, key 0.85, fill 0.35, rim 0.25, distance 2.45, yfov 49.1°) with linear-to-sRGB encoding.
 - **LGM proxy mesh** — opacity filter α > 0.10, 98th-percentile spatial trim, 3D Gaussian smoothing (k = 7, σ = 1.10), 256³ Marching Cubes at the 48th percentile, floater pruning, and k = 6 opacity-weighted color transfer from core Gaussians (α > 0.35, fallback α > 0.20).
 - **TRELLIS** — 8 + 8 sampling steps (CFG 7.5 / 3.0) with staged CPU–GPU offloading.
+- **PSNR** — computed on the 256² novel-view renders. A pixel-perfect match returns the documented cap of **100 dB** rather than infinity, so aggregates stay finite; the cap is recorded in `metadata` per sample.
 
 ## Repository layout
 
