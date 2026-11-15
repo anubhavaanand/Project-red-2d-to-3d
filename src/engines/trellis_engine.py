@@ -27,8 +27,9 @@ from .base import AbstractEngine, ReconstructionResult, Mesh3D, GaussianCloud
 from ._paths import extend_sys_path
 from ._memory import free_cuda_cache
 
-os.environ.setdefault("SPCONV_ALGO", "native")
-os.environ.setdefault("ATTN_BACKEND", "xformers")
+# ENG-29: TRELLIS reads these at import time, so they must be set before the
+# engine is imported — but setting them at module scope mutated global state
+# for every importer. load_model() now sets them just before the import.
 
 OutputFormat = Literal["mesh", "gaussian", "radiance_field"]
 
@@ -136,6 +137,10 @@ class TrellisEngine(AbstractEngine):
 
     def load_model(self) -> None:
         self._ensure_trellis_imports()
+        # ENG-29: set the TRELLIS backend variables here, immediately before the
+        # import that reads them, rather than mutating os.environ at module scope.
+        os.environ.setdefault("SPCONV_ALGO", "native")
+        os.environ.setdefault("ATTN_BACKEND", "xformers")
         from trellis.pipelines import TrellisImageTo3DPipeline
         from huggingface_hub import snapshot_download
 
