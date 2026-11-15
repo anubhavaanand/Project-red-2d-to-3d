@@ -141,6 +141,7 @@ class TriposrEngine(AbstractEngine):
             "stabilityai/TripoSR",
             config_name="config.yaml",
             weight_name="model.ckpt",
+            revision="5b521936b01fbe1890f6f9baed0254ab6351c04a",  # pinned SHA
         )
         self.model.renderer.set_chunk_size(self.chunk_size)
         self.model.to(self.device)
