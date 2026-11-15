@@ -126,10 +126,18 @@ class LGMEngine(AbstractEngine):
         self.model = self.model.half().to(self.device).eval()
 
         print("[LGM] Loading ImageDream multi-view diffusion …")
-        self.mv_pipeline = MVDreamPipeline.from_pretrained(
+        # SECURITY: Pin to a specific commit hash to prevent silent upstream changes.
+        # The model ships custom code (mv_unet.py) that diffusers executes — this is
+        # verified clean (no subprocess/eval/file writes/network calls), and pinning
+        # the revision prevents the code from changing without our knowledge.
+        from huggingface_hub import snapshot_download
+        _mv_local = snapshot_download(
             "ashawkey/imagedream-ipmv-diffusers",
+            revision="73a0341",  # pinned commit — do not change without security review
+        )
+        self.mv_pipeline = MVDreamPipeline.from_pretrained(
+            _mv_local,
             torch_dtype=torch.float16,
-            trust_remote_code=True,
         ).to(self.device)
         self.mv_pipeline.scheduler = DDIMScheduler.from_config(
             self.mv_pipeline.scheduler.config
