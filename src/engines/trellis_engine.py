@@ -25,6 +25,7 @@ from PIL import Image
 
 from .base import AbstractEngine, ReconstructionResult, Mesh3D, GaussianCloud
 from ._paths import extend_sys_path
+from ._memory import free_cuda_cache
 
 os.environ.setdefault("SPCONV_ALGO", "native")
 os.environ.setdefault("ATTN_BACKEND", "xformers")
@@ -100,7 +101,7 @@ class TrellisEngine(AbstractEngine):
             moved = pipe.to(self.device)
             self.pipeline = moved if moved is not None else pipe
 
-        torch.cuda.empty_cache()
+        free_cuda_cache()
         print("[TRELLIS] Pipeline loaded.")
 
     @torch.no_grad()
@@ -132,7 +133,7 @@ class TrellisEngine(AbstractEngine):
             )
             del cond, coords
             gc.collect()
-            torch.cuda.empty_cache()
+            free_cuda_cache()
 
             offload_names = (
                 "sparse_structure_flow_model",
@@ -143,7 +144,7 @@ class TrellisEngine(AbstractEngine):
             for n in offload_names:
                 if n in p.models:
                     p.models[n].to("cpu")
-            torch.cuda.empty_cache()
+            free_cuda_cache()
             gc.collect()
 
             out_gs_color = None
@@ -153,7 +154,7 @@ class TrellisEngine(AbstractEngine):
                 if "slat_decoder_gs" in p.models:
                     try:
                         p.models["slat_decoder_mesh"].to("cpu")
-                        torch.cuda.empty_cache()
+                        free_cuda_cache()
                         p.models["slat_decoder_gs"].to(self.dev)
                         with torch.cuda.device(self.dev):
                             out_gs_color = p.models["slat_decoder_gs"](slat)
@@ -162,10 +163,10 @@ class TrellisEngine(AbstractEngine):
                     finally:
                         p.models["slat_decoder_gs"].to("cpu")
                         p.models["slat_decoder_mesh"].to(self.dev)
-                        torch.cuda.empty_cache()
+                        free_cuda_cache()
             except torch.OutOfMemoryError:
                 print("[TRELLIS] mesh decode OOM -> gaussian fallback")
-                torch.cuda.empty_cache()
+                free_cuda_cache()
                 gc.collect()
                 p.models["slat_decoder_gs"].to(self.dev)
                 with torch.cuda.device(self.dev):
@@ -177,7 +178,7 @@ class TrellisEngine(AbstractEngine):
                 for n in offload_names:
                     if n in p.models:
                         p.models[n].to(self.dev)
-                torch.cuda.empty_cache()
+                free_cuda_cache()
         else:
             outputs = p.run(
                 rgba,
@@ -267,7 +268,7 @@ class TrellisEngine(AbstractEngine):
                 "face_count": len(mesh.faces),
                 "has_vertex_colors": vcols is not None,
             })
-            torch.cuda.empty_cache()
+            free_cuda_cache()
             gc.collect()
             return ReconstructionResult(mesh=mesh, metadata=metadata)
 
@@ -280,7 +281,7 @@ class TrellisEngine(AbstractEngine):
             sh_coeffs=gs.get_features[:, 0, :3].detach().cpu().numpy().astype(np.float32),
         )
         metadata.update({"gaussian_count": len(gaussians.positions)})
-        torch.cuda.empty_cache()
+        free_cuda_cache()
         gc.collect()
         return ReconstructionResult(gaussians=gaussians, metadata=metadata)
 
