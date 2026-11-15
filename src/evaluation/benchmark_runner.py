@@ -11,6 +11,7 @@ import time
 import traceback
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -801,12 +802,19 @@ class BenchmarkRunner:
                 print(f"[BenchmarkRunner] Resume load warning: {e}")
 
     @staticmethod
+    @lru_cache(maxsize=64)
     def _render_gt_novel(
         mesh_path: Path,
         azimuth_deg: float = 65.0,
         elevation_deg: float = 15.0,
         resolution: int = 256,
     ) -> np.ndarray | None:
+        """Render a GT novel view, cached across engines (EVAL-17).
+
+        The runner loops over four engines per sample, so the same GT mesh was
+        loaded and rendered four times. ``lru_cache`` keys on the arguments; the
+        returned array is treated as read-only by callers.
+        """
         return render_gso_mesh_view(
             mesh_path,
             azimuth_deg=azimuth_deg,
