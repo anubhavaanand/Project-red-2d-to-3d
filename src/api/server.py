@@ -93,6 +93,9 @@ def list_engines():
                 "vram_approx": "4–6 GB (fp16)",
                 "output_format": "mesh (.glb)",
             },
+            # API-03: what /predict returns when output_format is omitted.
+            "default_output_format": "mesh",
+            "supported_output_formats": ["mesh"],
         },
         {
             "id": EngineType.LGM,
@@ -103,6 +106,8 @@ def list_engines():
                 "vram_approx": "~10 GB (fp16)",
                 "output_format": "gaussians (.ply)",
             },
+            "default_output_format": "gaussians",
+            "supported_output_formats": ["gaussians", "mesh"],
         },
         {
             "id": EngineType.TRELLIS,
@@ -113,6 +118,8 @@ def list_engines():
                 "vram_approx": "~16–24 GB (fp16)",
                 "output_format": "mesh (.glb) / gaussians (.ply)",
             },
+            "default_output_format": "mesh",
+            "supported_output_formats": ["mesh", "gaussians"],
         },
     ]
 
@@ -121,9 +128,19 @@ async def predict(
     request,
     file: UploadFile = File(...),
     engine_type: EngineType = Form(...),
+    output_format: str = Form(None),
     _api_key: bool = Depends(verify_api_key),
     _rate_limit: bool = Depends(rate_limit),
 ):
+    # API-03: /engines advertises a default artefact per engine. Honour an
+    # explicit request, otherwise produce what the advertisement promises.
+    requested_format = (output_format or "").lower() or None
+    if requested_format is not None and requested_format not in ("mesh", "gaussians"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"output_format must be 'mesh' or 'gaussians', got '{output_format}'",
+        )
+
     try:
         engine = get_engine(engine_type)
     except ValueError as e:
@@ -162,7 +179,32 @@ async def predict(
                 print(f"[API] Warning: Background removal failed: {e}")
 
         # Run blocking GPU inference in threadpool to avoid blocking the event loop
-        result = await run_in_threadpool(engine.predict, image)
+        # API-03: LGM's predict() takes extract_mesh; every other engine is
+        # fixed at construction, so the request is only honoured where it can be.
+        if engine_type == EngineType.LGM:
+            want_mesh = requested_format != "gaussians"
+            result = await run_in_threadpool(engine.predict, image, want_mesh)
+        else:
+            if requested_format == "gaussians" and engine_type == EngineType.TRIPOSR:
+                raise HTTPException(
+                    status_code=400,
+                    detail="TripoSR only produces a mesh; use output_format='mesh'.",
+                )
+            result = await run_in_threadpool(engine.predict, image)
+
+        # API-03: prefer whichever artefact the caller asked for, then fall
+        # back to whatever the engine produced.
+        want_gaussians = requested_format == "gaussians"
+        if want_gaussians and result.gaussians is not None:
+            out_filename = f"{uuid.uuid4().hex}.ply"
+            out_path = os.path.join(OUTPUT_DIR, out_filename)
+            export_ply(result.gaussians, out_path)
+            return FileResponse(
+                path=out_path,
+                filename=out_filename,
+                media_type="application/octet-stream",
+                background=BackgroundTask(_cleanup_file, out_path),
+            )
 
         if result.mesh is not None:
             out_filename = f"{uuid.uuid4().hex}.glb"
