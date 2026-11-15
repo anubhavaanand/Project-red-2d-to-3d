@@ -1,5 +1,8 @@
 """Engines module with lazy imports to avoid heavyweight engine loads at import time."""
 
+import importlib
+from typing import Any, Dict
+
 from .base import AbstractEngine, Mesh3D, GaussianCloud, ReconstructionResult
 
 __all__ = [
@@ -14,20 +17,30 @@ __all__ = [
     "SF3DEngine",
 ]
 
-def __getattr__(name):
-    if name == "TriposrEngine":
-        from .triposr_engine import TriposrEngine
-        return TriposrEngine
-    if name == "LGMEngine":
-        from .lgm_engine import LGMEngine
-        return LGMEngine
-    if name == "TrellisEngine":
-        from .trellis_engine import TrellisEngine
-        return TrellisEngine
-    if name == "Spar3dEngine":
-        from .spar3d_engine import Spar3dEngine
-        return Spar3dEngine
-    if name == "SF3DEngine":
-        from .sf3d_engine import SF3DEngine
-        return SF3DEngine
-    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
+# ENG-44: name -> (module, attribute). Resolved classes are cached so repeated
+# attribute access does not re-import, and every access returns the same object.
+_LAZY: Dict[str, tuple] = {
+    "TriposrEngine": ("triposr_engine", "TriposrEngine"),
+    "LGMEngine": ("lgm_engine", "LGMEngine"),
+    "TrellisEngine": ("trellis_engine", "TrellisEngine"),
+    "Spar3dEngine": ("spar3d_engine", "Spar3dEngine"),
+    "SF3DEngine": ("sf3d_engine", "SF3DEngine"),
+}
+
+_cache: Dict[str, Any] = {}
+
+
+def __getattr__(name: str) -> Any:
+    try:
+        module_name, attr = _LAZY[name]
+    except KeyError:
+        raise AttributeError(f"module '{__name__}' has no attribute '{name}'") from None
+
+    if name not in _cache:
+        module = importlib.import_module(f".{module_name}", __name__)
+        _cache[name] = getattr(module, attr)
+    return _cache[name]
+
+
+def __dir__() -> list:
+    return sorted(set(list(globals()) + list(_LAZY)))
