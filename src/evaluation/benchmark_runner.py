@@ -555,6 +555,7 @@ def render_novel_view_same_bg(
     resolution: int = 256,
     white_bg: bool = True,
     already_normalized: bool = False,
+    trust_already_normalized: bool = False,
 ) -> np.ndarray | None:
     try:
         _ensure_pyopengl_compat()
@@ -567,7 +568,14 @@ def render_novel_view_same_bg(
             if len(raw_v) > 0
             else 1.0
         )
-        if not already_normalized or max_r < 0.6 or max_r > 1.6:
+        # EVAL-05 / benchmark freeze: the published v1.0 numbers came from this
+        # heuristic, which silently re-normalises a mesh it thinks is already
+        # normalised (radius outside 0.6..1.6). That reframes some meshes and
+        # moves PSNR/LPIPS for reasons unrelated to reconstruction quality.
+        # Default keeps the heuristic; opt in to trusting the flag.
+        if already_normalized and trust_already_normalized:
+            verts = raw_v
+        elif not already_normalized or max_r < 0.6 or max_r > 1.6:
             verts, _, _ = _normalize_vertices_robust(raw_v)
         else:
             verts = raw_v
