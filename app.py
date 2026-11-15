@@ -69,8 +69,18 @@ _engines: dict = {}
 _bg_remover: BackgroundRemover | None = None
 
 DEVICE = "cuda" if __import__("torch").cuda.is_available() else "cpu"
-OUTPUT_DIR = Path(tempfile.gettempdir()) / "image_to_3d_outputs"
-OUTPUT_DIR.mkdir(exist_ok=True)
+
+# SEC-27: /tmp is world-writable and the old fixed subdirectory name was
+# predictable, so any local user could read (or pre-create) generated models.
+# Use a per-user directory and restrict it to 0o700.
+OUTPUT_DIR = Path(tempfile.gettempdir()) / f"image_to_3d_outputs-{os.getuid()}"
+OUTPUT_DIR.mkdir(exist_ok=True, mode=0o700)
+try:
+    OUTPUT_DIR.chmod(0o700)
+except OSError:
+    # Some filesystems (e.g. certain mounted volumes) reject chmod; the
+    # per-user path already prevents cross-user name collisions.
+    pass
 
 
 def _get_bg_remover() -> BackgroundRemover:
