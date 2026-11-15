@@ -13,6 +13,7 @@ from ..config import EngineType
 from ..engines import AbstractEngine, TriposrEngine, LGMEngine, TrellisEngine
 from ..export.glb_exporter import export_glb
 from ..export.ply_exporter import export_ply
+from ..preprocessing.background_removal import BackgroundRemover
 
 app = FastAPI(title="Image-to-3D Benchmark API")
 
@@ -43,6 +44,7 @@ async def rate_limit(request):
 
 # Lazy engine cache
 _engines: Dict[EngineType, AbstractEngine] = {}
+_bg_remover = None  # Lazy background remover
 
 def get_engine(engine_type: EngineType) -> AbstractEngine:
     if engine_type not in _engines:
@@ -111,6 +113,14 @@ async def predict(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+    # Initialize background remover (lazy)
+    global _bg_remover
+    if _bg_remover is None:
+        try:
+            _bg_remover = BackgroundRemover()
+        except Exception as e:
+            print(f"[API] Warning: Could not initialize background remover: {e}")
+
     try:
         contents = await file.read()
         
@@ -127,6 +137,13 @@ async def predict(
         # Keep RGBA to preserve alpha channel for foreground cropping
         if image.mode != "RGBA":
             image = image.convert("RGBA")
+
+        # Apply background removal if available
+        if _bg_remover is not None:
+            try:
+                image = _bg_remover.remove(image)
+            except Exception as e:
+                print(f"[API] Warning: Background removal failed: {e}")
 
         result = engine.predict(image)
 
