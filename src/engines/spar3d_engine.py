@@ -59,6 +59,29 @@ def _to_rgb_array(tex_img) -> np.ndarray | None:
     return rgb
 
 
+def _ensure_outward_normals(tm) -> str:
+    """Make ``tm`` face outward, reporting what was done.
+
+    ENG-33: the code called ``tm.invert()`` inside a bare ``try/except``. If
+    upstream stopped inverting, that would flip correct normals; if it raised,
+    the failure vanished. Use the signed volume instead: a negative volume means
+    inward-facing winding, which ``fix_normals()`` repairs.
+    """
+    try:
+        volume = float(tm.volume)
+    except Exception as e:
+        return f"volume unavailable ({type(e).__name__})"
+
+    if volume < 0:
+        try:
+            tm.fix_normals()
+            return "inverted (negative volume) -> fixed"
+        except Exception as e:
+            return f"inverted (negative volume), fix failed ({type(e).__name__})"
+
+    return "already outward"
+
+
 class Spar3dEngine(AbstractEngine):
     def __init__(
         self,
@@ -242,11 +265,11 @@ class Spar3dEngine(AbstractEngine):
         latency = time.perf_counter() - t0
 
         tm = _extract_mesh_object(mesh_out)
-        # Undo spar3d/system.py:917's `tmesh.invert()` so triangle winding & normals face OUTWARD!
-        try:
-            tm.invert()
-        except Exception:
-            pass
+        # SPAR3D's system.py:917 calls tmesh.invert(), so the mesh arrives with
+        # inward-facing winding. ENG-33: rather than inverting blind inside a
+        # bare except, check the signed volume and fix normals if needed, then
+        # record what was done.
+        normal_fix = _ensure_outward_normals(tm)
 
         verts = np.asarray(tm.vertices, dtype=np.float32)
         faces = np.asarray(tm.faces, dtype=np.int64)
@@ -293,6 +316,7 @@ class Spar3dEngine(AbstractEngine):
                 "vertex_count": len(mesh.vertices),
                 "face_count": len(mesh.faces),
                 "has_vertex_colors": vcols is not None,
+                "normal_fix": normal_fix,
             },
         )
 
