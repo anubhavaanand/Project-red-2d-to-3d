@@ -74,7 +74,16 @@ def get_engine(engine_type: EngineType) -> AbstractEngine:
             raise ValueError(f"Unknown engine: {engine_type}")
     return _engines[engine_type]
 
-OUTPUT_DIR = "./outputs"
+# API-05: ExportConfig.output_dir was never read; the API hardcoded ./outputs.
+# Load AppConfig at import time and honour an env override for deployments that
+# mount a scratch volume.
+def _resolve_output_dir() -> str:
+    from ..config import AppConfig
+
+    return os.environ.get("IMAGE_TO_3D_OUTPUT_DIR") or AppConfig().export.output_dir
+
+
+OUTPUT_DIR = _resolve_output_dir()
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
@@ -90,7 +99,9 @@ def _cleanup_file(path: str) -> None:
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy"}
+    # API-05: expose the resolved output dir so a deployment's config is
+    # observable without reading the source.
+    return {"status": "healthy", "output_dir": OUTPUT_DIR}
 
 @app.get("/engines")
 def list_engines():
