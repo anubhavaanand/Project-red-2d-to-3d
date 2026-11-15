@@ -134,14 +134,23 @@ class Spar3dEngine(AbstractEngine):
                 revision="5699918cb34f55cd7d828493d2725f3038313761",  # pinned SHA
             )
         except Exception as e:
-            print(f"[SPAR3D] Primary repo gated ({e}); falling back to public mirror zimengxiong/Modelr-SPAR3D …")
-            self.model = SPAR3D.from_pretrained(
-                "zimengxiong/Modelr-SPAR3D",
-                config_name="config.yaml",
-                weight_name="model.safetensors",
-                low_vram_mode=self.low_vram_mode,
-                revision="af033552e8c7d25971c4fca69ab4c926f43b2ec2",  # pinned SHA
-            )
+            # SECURITY: Only fall back to mirror if explicitly allowed
+            import os
+            if os.environ.get("SPAR3D_ALLOW_MIRROR", "0") == "1":
+                print(f"[SPAR3D] WARNING: Primary repo failed ({e}). Falling back to third-party mirror (zimengxiong/Modelr-SPAR3D)")
+                print("[SPAR3D] WARNING: Third-party code will be executed. Set SPAR3D_ALLOW_MIRROR=0 to disable.")
+                self.model = SPAR3D.from_pretrained(
+                    "zimengxiong/Modelr-SPAR3D",
+                    config_name="config.yaml",
+                    weight_name="model.safetensors",
+                    low_vram_mode=self.low_vram_mode,
+                    revision="af033552e8c7d25971c4fca69ab4c926f43b2ec2",  # pinned SHA
+                )
+            else:
+                raise RuntimeError(
+                    f"SPAR3D primary repo failed ({e}). "
+                    "Set SPAR3D_ALLOW_MIRROR=1 to allow fallback to third-party mirror."
+                ) from e
         self.model.to(self.device).eval()
         self._foreground_crop = foreground_crop
         print("[SPAR3D] Model loaded.")
