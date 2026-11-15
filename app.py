@@ -51,12 +51,18 @@ import gradio as gr
 import numpy as np
 from PIL import Image
 
-# Add project src to path when running standalone.
-# SEC-16: append, never prepend — a leading entry would let a same-named module
-# in this directory shadow an installed dependency.
-if str(Path(__file__).parent) not in sys.path:
-    sys.path.append(str(Path(__file__).parent))
-from src.preprocessing.background_removal import BackgroundRemover
+# APP-06: import the package absolutely. When the project is installed
+# (`pip install -e .`) or app.py is run as a module (`python -m app`), these
+# resolve without touching sys.path. The fallback keeps `python app.py`
+# working from a source checkout without installing; it appends rather than
+# prepends (SEC-16) so a same-named module here cannot shadow an installed one.
+try:
+    from src.preprocessing.background_removal import BackgroundRemover
+except ModuleNotFoundError:  # pragma: no cover - source checkout only
+    if str(Path(__file__).parent) not in sys.path:
+        sys.path.append(str(Path(__file__).parent))
+    from src.preprocessing.background_removal import BackgroundRemover
+
 from src.engines.triposr_engine import TriposrEngine
 from src.engines.trellis_engine import TrellisEngine
 from src.engines.lgm_engine import LGMEngine
