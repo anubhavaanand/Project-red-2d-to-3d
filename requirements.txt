@@ -1,36 +1,36 @@
 # Core
-torch>=2.1.0
-torchvision>=0.16.0
-numpy<2.0
-Pillow>=10.0
+torch==2.2.0
+torchvision==0.17.0
+numpy==1.26.4
+Pillow==10.2.0
 
 # 3D / mesh
-trimesh>=4.0.0
-open3d>=0.18.0
-scipy>=1.11.0
-pyrender>=0.1.45
+trimesh==4.4.1
+open3d==0.18.0
+scipy==1.12.0
+pyrender==0.1.45
 
 # Metrics
-lpips>=0.1.4
+lpips==0.1.4
 
 # Background removal
-rembg[gpu]>=2.0.50
-onnxruntime
+rembg[gpu]==2.0.50
+onnxruntime==1.17.0
 
 # Web / API
-fastapi>=0.110.0
-uvicorn[standard]>=0.27.0
-gradio>=4.20.0
+fastapi==0.109.2
+uvicorn[standard]==0.27.1
+gradio==4.19.2
 
 # Model hub
-huggingface-hub>=0.21.0
-diffusers>=0.27.0
-transformers>=4.38.0
-accelerate>=0.27.0
+huggingface-hub==0.20.3
+diffusers==0.26.3
+transformers==4.38.2
+accelerate==0.27.2
 
 # Data
-pandas>=2.0.0
-pydantic>=2.0.0
+pandas==2.2.0
+pydantic==2.6.1
 
 # TripoSR dependencies
 torchmcubes @ git+https://github.com/tatsy/torchmcubes.git
@@ -38,23 +38,30 @@ xatlas==0.0.9
 omegaconf==2.3.0
 
 # LGM dependencies
-tyro
-kiui>=0.2.3
-safetensors
-einops
-roma
-plyfile
-scikit-image
-scikit-learn
+tyro==0.5.10
+kiui==0.3.4
+safetensors==0.4.2
+einops==0.7.0
+roma==1.4.0
+plyfile==1.0.3
+scikit-image==0.22.0
+scikit-learn==1.4.1
 diff-gaussian-rasterization @ git+https://github.com/ashawkey/diff-gaussian-rasterization.git
 
 # TRELLIS dependencies
 spconv @ git+https://github.com/traveller59/spconv.git
 flash-attn @ git+https://github.com/Dao-AILab/flash-attention.git
-xformers
+xformers==0.0.24
 diffoctreerast @ git+https://github.com/facebookresearch/diffoctreerast.git
-nvdiffrast
-easydict>=1.13
-imageio[ffmpeg]
-timm
-kornia
+nvdiffrast==0.3.0
+easydict==1.13
+imageio[ffmpeg]==2.34.0
+timm==0.9.16
+kornia==0.7.2
+
+# SPAR3D dependencies
+packaging==23.2
+jaxtyping==0.2.34
+loralib==0.1.2
+ftfy==6.1.3
+regex==2023.12.25
