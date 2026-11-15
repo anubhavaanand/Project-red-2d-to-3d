@@ -440,7 +440,7 @@ def align_mesh_to_gt(
             best_R_vis = R_total
             best_t_vis = t_total
 
-    aligned_pts = (pred_pts @ best_R.T) + best_t
+    aligned_pts = (pred_pts @ best_R_vis.T) + best_t_vis
     aligned_verts = (norm_verts @ best_R_vis.T) + best_t_vis
     aligned_mesh = Mesh3D(
         vertices=aligned_verts.astype(np.float32),
