@@ -4,7 +4,6 @@ import ast
 import inspect
 import sys
 import types
-
 from pathlib import Path
 
 import numpy as np
@@ -136,8 +135,10 @@ class TestWiring:
                     pytest.fail(f"bare mesh_out[...] at line {node.lineno}")
 
     def test_uses_the_shared_helper(self):
-        src = inspect.getsource(__import__("src.engines.sf3d_engine", fromlist=["x"]).SF3DEngine.predict)
-        assert "extract_mesh_object(mesh_out, engine=\"SF3D\")" in src
+        src = inspect.getsource(
+            __import__("src.engines.sf3d_engine", fromlist=["x"]).SF3DEngine.predict
+        )
+        assert 'extract_mesh_object(mesh_out, engine="SF3D")' in src
 
     def test_engine_parses(self):
         ast.parse(ENGINE.read_text())
@@ -146,7 +147,7 @@ class TestWiring:
 class TestSpar3dStillUsesTheSharedValidator:
     def test_spar3d_delegates(self):
         src = (Path(ENGINE).parent / "spar3d_engine.py").read_text()
-        assert "return extract_mesh_object(mesh_out, engine=\"SPAR3D\")" in src
+        assert 'return extract_mesh_object(mesh_out, engine="SPAR3D")' in src
 
     def test_spar3d_error_subclasses_engine_output_error(self):
         src = (Path(ENGINE).parent / "spar3d_engine.py").read_text()

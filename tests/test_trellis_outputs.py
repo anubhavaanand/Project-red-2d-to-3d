@@ -3,16 +3,13 @@
 import ast
 from pathlib import Path
 
-
 ENGINE = Path(__file__).parent.parent / "src" / "engines" / "trellis_engine.py"
 
 
 def _first_of():
     """Compile _first_of without importing the engine (it needs torch)."""
     tree = ast.parse(ENGINE.read_text())
-    fn = next(
-        n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "_first_of"
-    )
+    fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "_first_of")
     ns = {}
     exec(compile(ast.Module(body=[fn], type_ignores=[]), str(ENGINE), "exec"), ns)
     return ns["_first_of"]
@@ -55,7 +52,7 @@ class TestSourceContract:
                     and inner.slice.value == "mesh"
                 ):
                     offenders.append(node.lineno)
-        assert not offenders, f"outputs[\"mesh\"][...] indexed at lines {offenders}"
+        assert not offenders, f'outputs["mesh"][...] indexed at lines {offenders}'
 
     def test_uses_get_with_helper(self):
         src = ENGINE.read_text()

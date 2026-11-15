@@ -21,19 +21,31 @@ jobs:
           python-version: "3.11"
 
       - name: Install linting tools
-        run: |
-          pip install ruff mypy
+        run: pip install ruff
 
-      - name: Run ruff (lint + format check)
-        run: |
-          ruff check src/ tests/ || true
-          ruff format --check src/ tests/ || true
-          echo "::notice::Lint completed (style issues may exist - check logs)"
+      - name: Ruff lint
+        run: ruff check src/ tests/
 
-      - name: Run mypy (type check)
+      - name: Ruff format check
+        run: ruff format --check src/ tests/
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install test dependencies
         run: |
-          mypy src/ --ignore-missing-imports --no-strict-optional || true
-          echo "::notice::Type check completed (issues may exist - check logs)"
+          pip install -e .
+          pip install pytest numpy pillow scipy trimesh pandas
+
+      - name: Run pytest
+        run: pytest tests/ -q
 
   security:
     runs-on: ubuntu-latest
@@ -46,18 +58,17 @@ jobs:
           python-version: "3.11"
 
       - name: Install security tools
-        run: |
-          pip install bandit safety
+        run: pip install bandit
 
-      - name: Run bandit (security lint)
+      - name: Bandit (security lint)
         run: |
-          bandit -r src/ -ll -ii || true
-          echo "::notice::Security scan completed (issues may exist - check logs)"
-
-      - name: Check dependencies for vulnerabilities
-        run: |
-          safety check --json || true
-        continue-on-error: true
+          # B108 hardcoded_tmp_directory: the engine wrappers deliberately probe
+          #   well-known clone locations (/tmp/<Repo>, /kaggle/working). These are
+          #   directories we read from, not temp files we create; the actual output
+          #   directory is configurable (API-05) and created 0o700 (SEC-27).
+          # B310 urllib url open: model_weights.py fetches only the pinned HTTPS
+          #   URLs in _PINS and verifies the SHA-256 of what it downloads (SEC-12).
+          bandit -r src/ -ll -ii -s B108,B310
 
   dependency-audit:
     runs-on: ubuntu-latest
@@ -75,79 +86,7 @@ jobs:
           pip install pip-audit
 
       - name: Audit dependencies for known vulnerabilities
-        run: |
-          pip-audit --desc --format=json --output=audit-report.json || true
-
-      - name: Check for unpinned dependencies
-        run: |
-          python -c "
-          import re
-          import sys
-          from pathlib import Path
-
-          # Check pyproject.toml for unpinned deps
-          pyproject = Path('pyproject.toml').read_text()
-          reqs = Path('requirements.txt').read_text()
-
-          issues = []
-
-          # Check for git+ dependencies without commit pins
-          for line in reqs.splitlines():
-              if line.startswith('git+') and '@' not in line:
-                  issues.append(f'Unpinned git dependency: {line}')
-
-          if issues:
-              print('WARNING: Found unpinned dependencies:')
-              for i in issues:
-                  print(f'  - {i}')
-          else:
-              print('All dependencies are pinned')
-          "
-
-      - name: Verify imports are declared
-        run: |
-          python -c "
-          import ast
-          import sys
-          from pathlib import Path
-
-          # Parse all Python files and collect imports
-          src_dir = Path('src')
-          all_imports = set()
-
-          for py_file in src_dir.rglob('*.py'):
-              try:
-                  tree = ast.parse(py_file.read_text())
-                  for node in ast.walk(tree):
-                      if isinstance(node, ast.Import):
-                          for alias in node.names:
-                              all_imports.add(alias.name.split('.')[0])
-                      elif isinstance(node, ast.ImportFrom):
-                          if node.module:
-                              all_imports.add(node.module.split('.')[0])
-              except SyntaxError:
-                  pass
-
-          # Standard library modules (partial list)
-          stdlib = {
-              'os', 'sys', 'json', 'time', 'pathlib', 'typing', 'collections',
-              'dataclasses', 'abc', 'io', 're', 'math', 'random', 'hashlib',
-              'subprocess', 'shutil', 'tempfile', 'uuid', 'warnings', 'logging',
-              'datetime', 'functools', 'itertools', 'copy', 'pickle', 'base64',
-              'struct', 'enum', 'threading', 'multiprocessing', 'queue',
-              'socket', 'http', 'urllib', 'email', 'csv', 'sqlite3',
-          }
-
-          # Filter to third-party imports
-          third_party = all_imports - stdlib - {'src', '__future__'}
-          third_party = {m for m in third_party if not m.startswith('_')}
-
-          if third_party:
-              print(f'Third-party imports found: {sorted(third_party)}')
-              print('Verify these are declared in pyproject.toml or requirements.txt')
-          else:
-              print('No third-party imports detected')
-          "
+        run: pip-audit --desc
 
   import-check:
     runs-on: ubuntu-latest
@@ -160,23 +99,21 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: |
-          pip install -e .
+        run: pip install -e .
 
-      - name: Verify all engines import cleanly
+      - name: Verify the modules that need no GPU import cleanly
         run: |
           python -c "
-          try:
-              from src.engines.triposr_engine import TriposrEngine
-              from src.engines.lgm_engine import LGMEngine
-              from src.engines.trellis_engine import TrellisEngine
-              from src.engines.spar3d_engine import Spar3dEngine
-              from src.evaluation.benchmark_runner import BenchmarkRunner
-              print('All imports OK')
-          except ImportError as e:
-              print(f'SKIP: Import requires GPU dependencies: {e}')
-          except Exception as e:
-              print(f'WARN: Unexpected import error: {e}')
+          from src.engines.base import Mesh3D, GaussianCloud, ReconstructionResult
+          from src.engines._mask import derive_foreground_mask
+          from src.engines._memory import free_cuda_cache
+          from src.engines._outputs import extract_mesh_object
+          from src.engines._paths import extend_sys_path
+          from src.model_weights import asset
+          from src.evaluation.chamfer_distance import compute_chamfer_distance
+          from src.evaluation.f_score import compute_f_score
+          from src.config import AppConfig, EngineType
+          print('Core modules import OK')
           "
 
   results-contract:

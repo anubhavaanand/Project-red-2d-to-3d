@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-import numpy as np
 from pathlib import Path
+
+import numpy as np
+
 from ..engines.base import GaussianCloud
 
 
@@ -87,4 +89,3 @@ def export_ply(gaussians: GaussianCloud, filepath: str) -> None:
                 f"{scales[i, 0]:.6f} {scales[i, 1]:.6f} {scales[i, 2]:.6f} "
                 f"{rot[i, 0]:.6f} {rot[i, 1]:.6f} {rot[i, 2]:.6f} {rot[i, 3]:.6f}\n"
             )
-

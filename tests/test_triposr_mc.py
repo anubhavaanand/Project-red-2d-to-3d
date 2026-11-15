@@ -37,7 +37,7 @@ class TestSourceContract:
     def test_dim_call_is_guarded(self):
         """ENG-04: level.dim() must not run unconditionally."""
         src = ENGINE.read_text()
-        assert "hasattr(level, \"dim\")" in src
+        assert 'hasattr(level, "dim")' in src
 
     def test_accepts_array_like(self):
         src = ENGINE.read_text()

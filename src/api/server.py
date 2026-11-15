@@ -29,12 +29,6 @@ if __package__ in (None, ""):
     _runpy.run_module("src.api.server", run_name="__main__")
     raise SystemExit(0)
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, Security
-from fastapi.responses import FileResponse
-from fastapi.security import APIKeyHeader
-from starlette.background import BackgroundTask
-from starlette.concurrency import run_in_threadpool
-from PIL import Image
 import asyncio
 import io
 import logging
@@ -42,9 +36,15 @@ import os
 import threading
 import time
 import uuid
-from pathlib import Path
-from typing import Dict, Any
 from collections import defaultdict
+from pathlib import Path
+
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Security, UploadFile
+from fastapi.responses import FileResponse
+from fastapi.security import APIKeyHeader
+from PIL import Image
+from starlette.background import BackgroundTask
+from starlette.concurrency import run_in_threadpool
 
 logger = logging.getLogger(__name__)
 
@@ -61,24 +61,25 @@ ALLOWED_MIME_TYPES = {
     "image/bmp",
 }
 
-from ..config import EngineType
-from ..engines import (
+from ..config import EngineType  # noqa: E402  (bootstrap above must run first)
+from ..engines import (  # noqa: E402  (bootstrap above must run first)
     AbstractEngine,
-    TriposrEngine,
     LGMEngine,
-    TrellisEngine,
-    Spar3dEngine,
     SF3DEngine,
+    Spar3dEngine,
+    TrellisEngine,
+    TriposrEngine,
 )
-from ..export.glb_exporter import export_glb
-from ..export.ply_exporter import export_ply
-from ..preprocessing.background_removal import BackgroundRemover
+from ..export.glb_exporter import export_glb  # noqa: E402
+from ..export.ply_exporter import export_ply  # noqa: E402
+from ..preprocessing.background_removal import BackgroundRemover  # noqa: E402
 
 app = FastAPI(title="Image-to-3D Benchmark API")
 
 # SECURITY: API key authentication
 API_KEY = os.environ.get("API_KEY")
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
 
 async def verify_api_key(api_key: str = Security(api_key_header)):
     if not API_KEY:
@@ -87,8 +88,9 @@ async def verify_api_key(api_key: str = Security(api_key_header)):
         raise HTTPException(status_code=403, detail="Invalid API key")
     return True
 
+
 # SECURITY: Simple rate limiting (requests per minute per IP)
-_rate_limits: Dict[str, list] = defaultdict(list)
+_rate_limits: dict[str, list] = defaultdict(list)
 RATE_LIMIT = 10  # requests per minute
 
 # API-09: nothing bounded concurrent inference, so N simultaneous requests
@@ -98,8 +100,10 @@ MAX_CONCURRENT_INFERENCE = int(os.environ.get("MAX_CONCURRENT_INFERENCE", "1"))
 INFERENCE_TIMEOUT_S = float(os.environ.get("INFERENCE_TIMEOUT_S", "600"))
 _inference_slots = asyncio.Semaphore(MAX_CONCURRENT_INFERENCE)
 
+
 async def rate_limit(request):
     import time
+
     client_ip = request.client.host if request.client else "unknown"
     now = time.time()
     _rate_limits[client_ip] = [t for t in _rate_limits[client_ip] if now - t < 60]
@@ -108,8 +112,9 @@ async def rate_limit(request):
     _rate_limits[client_ip].append(now)
     return True
 
+
 # Lazy engine cache
-_engines: Dict[EngineType, AbstractEngine] = {}
+_engines: dict[EngineType, AbstractEngine] = {}
 _bg_remover = None  # Lazy background remover
 _bg_lock = threading.Lock()  # API-07: guards _bg_remover creation
 
@@ -117,7 +122,7 @@ _bg_lock = threading.Lock()  # API-07: guards _bg_remover creation
 # for the same engine could both see the cache empty and each load the
 # multi-GB model, OOMing the GPU. A per-engine lock makes construction
 # happen exactly once; the outer check keeps the common case lock-free.
-_engine_locks: Dict[EngineType, threading.Lock] = {}
+_engine_locks: dict[EngineType, threading.Lock] = {}
 _engine_locks_guard = threading.Lock()
 
 
@@ -157,6 +162,7 @@ def get_engine(engine_type: EngineType) -> AbstractEngine:
 
         _engines[engine_type] = engine
         return engine
+
 
 # API-05: ExportConfig.output_dir was never read; the API hardcoded ./outputs.
 # Load AppConfig at import time and honour an env override for deployments that
@@ -225,21 +231,21 @@ async def _run_inference(call):
     """
     async with _inference_slots:
         try:
-            return await asyncio.wait_for(
-                run_in_threadpool(call), timeout=INFERENCE_TIMEOUT_S
-            )
+            return await asyncio.wait_for(run_in_threadpool(call), timeout=INFERENCE_TIMEOUT_S)
         except asyncio.TimeoutError:
             logger.error("Inference exceeded %.0fs", INFERENCE_TIMEOUT_S)
             raise HTTPException(
                 status_code=504,
                 detail=f"Inference timed out after {INFERENCE_TIMEOUT_S:.0f}s",
-            )
+            ) from None
+
 
 @app.get("/health")
 def health_check():
     # API-05: expose the resolved output dir so a deployment's config is
     # observable without reading the source.
     return {"status": "healthy", "output_dir": OUTPUT_DIR}
+
 
 @app.get("/engines")
 def list_engines():
@@ -307,6 +313,7 @@ def list_engines():
         },
     ]
 
+
 @app.post("/predict")
 async def predict(
     request,
@@ -328,7 +335,7 @@ async def predict(
     try:
         engine = get_engine(engine_type)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from None
 
     # Initialize background remover (lazy)
     global _bg_remover
@@ -371,8 +378,10 @@ async def predict(
 
         # SECURITY: Validate image dimensions to prevent decompression bombs
         if image.width > 4096 or image.height > 4096:
-            raise HTTPException(status_code=413, detail="Image dimensions too large (max 4096x4096)")
-        
+            raise HTTPException(
+                status_code=413, detail="Image dimensions too large (max 4096x4096)"
+            )
+
         # Keep RGBA to preserve alpha channel for foreground cropping
         if image.mode != "RGBA":
             image = image.convert("RGBA")
@@ -389,7 +398,9 @@ async def predict(
         # fixed at construction, so the request is only honoured where it can be.
         if engine_type == EngineType.LGM:
             want_mesh = requested_format != "gaussians"
-            call = lambda: engine.predict(image, want_mesh)
+
+            def call(_e=engine, _img=image, _m=want_mesh):
+                return _e.predict(_img, _m)
         else:
             mesh_only = {
                 EngineType.TRIPOSR: "TripoSR",
@@ -402,7 +413,9 @@ async def predict(
                     detail=f"{mesh_only[engine_type]} only produces a mesh; "
                     "use output_format='mesh'.",
                 )
-            call = lambda: engine.predict(image)
+
+            def call(_e=engine, _img=image):
+                return _e.predict(_img)
 
         # API-09: bound concurrency and wait no longer than the timeout.
         result = await _run_inference(call)
@@ -444,7 +457,9 @@ async def predict(
                 background=BackgroundTask(_cleanup_file, out_path),
             )
         else:
-            raise HTTPException(status_code=500, detail="Engine returned neither mesh nor gaussians.")
+            raise HTTPException(
+                status_code=500, detail="Engine returned neither mesh nor gaussians."
+            )
 
     except HTTPException:
         # Preserve deliberate 4xx/5xx responses (bad input, missing engine output).
@@ -459,7 +474,7 @@ async def predict(
         raise HTTPException(
             status_code=500,
             detail=f"Internal server error (request_id={request_id})",
-        )
+        ) from None
 
 
 if __name__ == "__main__":
@@ -470,4 +485,3 @@ if __name__ == "__main__":
         host=os.environ.get("API_HOST", "127.0.0.1"),
         port=int(os.environ.get("API_PORT", "8000")),
     )
-

@@ -19,16 +19,16 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any
 
 import numpy as np
 import torch
 from PIL import Image
 
-from .base import AbstractEngine, ReconstructionResult, Mesh3D
-from ._paths import extend_sys_path
 from ._memory import free_cuda_cache
 from ._outputs import extract_mesh_object
+from ._paths import extend_sys_path
+from .base import AbstractEngine, Mesh3D, ReconstructionResult
 
 
 def _summarize_glob_dict(glob_dict) -> dict:
@@ -92,7 +92,7 @@ class SF3DEngine(AbstractEngine):
             self.model = SF3D.from_pretrained(
                 "stabilityai/stable-fast-3d",
                 config_name="sf3d.yaml",
-                low_vram_mode=self.low_vram_mode,   # ENG-37: configurable; default True is T4-safe
+                low_vram_mode=self.low_vram_mode,  # ENG-37: configurable; default True is T4-safe
             )
             self.model.to(self.device).eval()
         except Exception as e:
@@ -126,16 +126,16 @@ class SF3DEngine(AbstractEngine):
         # ENG-38: mesh_out[0] assumed a sequence; a bare Trimesh would be
         # indexed as a vertex array and fail obscurely. Validate the payload.
         tm = extract_mesh_object(mesh_out, engine="SF3D")  # trimesh.Trimesh with UV
-        
+
         # Extract UV coordinates and texture map from trimesh visual
         uv_coords = None
         texture_map = None
-        if hasattr(tm.visual, 'uv') and tm.visual.uv is not None:
+        if hasattr(tm.visual, "uv") and tm.visual.uv is not None:
             uv_coords = np.asarray(tm.visual.uv, dtype=np.float32)
-        if hasattr(tm.visual, 'material') and tm.visual.material is not None:
-            if hasattr(tm.visual.material, 'image') and tm.visual.material.image is not None:
+        if hasattr(tm.visual, "material") and tm.visual.material is not None:
+            if hasattr(tm.visual.material, "image") and tm.visual.material.image is not None:
                 texture_map = tm.visual.material.image
-        
+
         mesh = Mesh3D(
             vertices=np.asarray(tm.vertices, dtype=np.float32),
             faces=np.asarray(tm.faces, dtype=np.int32),
@@ -144,7 +144,7 @@ class SF3DEngine(AbstractEngine):
         )
         # ENG-42: validate at the source rather than in export/rendering.
         mesh.validate()
-        metadata: Dict[str, Any] = {
+        metadata: dict[str, Any] = {
             "engine": "SF3D",
             "latency_s": round(latency, 3),
             "vertex_count": len(mesh.vertices),
@@ -158,7 +158,7 @@ class SF3DEngine(AbstractEngine):
         free_cuda_cache()
         return ReconstructionResult(mesh=mesh, metadata=metadata)
 
-    def get_engine_info(self) -> Dict[str, Any]:
+    def get_engine_info(self) -> dict[str, Any]:
         return {
             "name": "SF3D",
             "paper": "arXiv:2408.00653",

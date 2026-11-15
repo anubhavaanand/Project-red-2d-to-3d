@@ -8,7 +8,8 @@ import pytest
 COMPAT = Path(__file__).parent.parent / "src" / "engines" / "_compat.py"
 
 torch = pytest.importorskip("torch")
-import torch.nn as nn
+
+import torch.nn as nn  # noqa: E402  (must follow importorskip)
 
 
 def _prune_fn():

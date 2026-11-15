@@ -1,7 +1,8 @@
 import numpy as np
+
 from .chamfer_distance import compute_chamfer_distance
 from .f_score import compute_f_score
-from .psnr_lpips import compute_psnr, compute_lpips
+from .psnr_lpips import compute_lpips, compute_psnr
 
 
 def normalize_point_cloud(points: np.ndarray) -> np.ndarray:

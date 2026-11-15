@@ -37,7 +37,9 @@ def _build_get_engine():
     ns = {
         "threading": threading,
         "Dict": dict,
-        "EngineType": type("E", (), {n: n for n in ("TRIPOSR", "LGM", "TRELLIS", "SPAR3D", "SF3D")}),
+        "EngineType": type(
+            "E", (), {n: n for n in ("TRIPOSR", "LGM", "TRELLIS", "SPAR3D", "SF3D")}
+        ),
         "AbstractEngine": object,
         "TriposrEngine": _FakeEngine,
         "LGMEngine": _FakeEngine,

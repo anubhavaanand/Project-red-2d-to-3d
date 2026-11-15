@@ -12,11 +12,7 @@ ENGINE = Path(__file__).parent.parent / "src" / "engines" / "spar3d_engine.py"
 
 def _to_rgb_array():
     tree = ast.parse(ENGINE.read_text())
-    fn = next(
-        n
-        for n in tree.body
-        if isinstance(n, ast.FunctionDef) and n.name == "_to_rgb_array"
-    )
+    fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "_to_rgb_array")
     ns = {"np": np}
     exec(compile(ast.Module(body=[fn], type_ignores=[]), str(ENGINE), "exec"), ns)
     return ns["_to_rgb_array"]
@@ -76,7 +72,7 @@ class TestToRgbArray:
 
 class TestSourceContract:
     def test_texture_convert_is_guarded(self):
-        """ENG-35: the *texture* conversion must live inside the helper.
+        r"""ENG-35: the *texture* conversion must live inside the helper.
 
         A blind \`tex_img.convert(...)\` on the material is the bug; converting
         the incoming PIL image in \`predict\` is fine.

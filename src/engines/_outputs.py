@@ -27,8 +27,7 @@ def extract_mesh_object(mesh_out, engine: str = "engine"):
 
     if not hasattr(mesh_out, "vertices") or not hasattr(mesh_out, "faces"):
         raise EngineOutputError(
-            f"{engine} returned {type(mesh_out).__name__}, which has no "
-            "vertices/faces"
+            f"{engine} returned {type(mesh_out).__name__}, which has no vertices/faces"
         )
 
     return mesh_out

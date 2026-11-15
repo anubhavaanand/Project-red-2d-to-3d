@@ -35,9 +35,7 @@ class BackgroundRemover:
         white_pixels = np.all(orig_arr[..., :3] > 252, axis=-1)
         labeled, _ = label(white_pixels)
         border_labels = set(
-            np.concatenate([
-                labeled[0, :], labeled[-1, :], labeled[:, 0], labeled[:, -1]
-            ])
+            np.concatenate([labeled[0, :], labeled[-1, :], labeled[:, 0], labeled[:, -1]])
         ) - {0}
         border_white_bg = np.isin(labeled, list(border_labels))
 

@@ -22,7 +22,7 @@ class TestLazyTable:
         import src.engines as engines
 
         with pytest.raises(AttributeError, match="no attribute 'NoSuchEngine'"):
-            engines.NoSuchEngine
+            _ = engines.NoSuchEngine  # noqa: B018
 
     def test_dir_includes_lazy_names(self):
         import src.engines as engines
@@ -61,11 +61,11 @@ class TestCaching:
         engines.importlib.import_module = counting
         try:
             try:
-                engines.SF3DEngine
+                _ = engines.SF3DEngine  # noqa: B018
             except Exception:
                 pytest.skip("engine import requires torch")
             attempts["n"] = 0
-            engines.SF3DEngine
+            _ = engines.SF3DEngine  # noqa: B018
             assert attempts["n"] == 0, "module was re-imported on the cached path"
         finally:
             engines.importlib.import_module = real
@@ -76,8 +76,8 @@ class TestCaching:
 
         engines._cache.clear()
         try:
-            engines.TriposrEngine  # noqa: F841
-            engines.LGMEngine  # noqa: F841
+            _ = engines.TriposrEngine  # noqa: B018
+            _ = engines.LGMEngine  # noqa: B018
         except Exception:
             pytest.skip("engine import requires torch")
         assert "TriposrEngine" in engines._cache
@@ -88,14 +88,18 @@ class TestCaching:
 class TestSourceStructure:
     def test_uses_importlib_import_module(self):
         src = INIT.read_text()
-        assert "importlib.import_module(f\".{module_name}\", __name__)" in src
+        assert 'importlib.import_module(f".{module_name}", __name__)' in src
 
     def test_no_repeated_from_imports(self):
         """ENG-44: the per-name 'from .x import Y' chain must be gone."""
         tree = ast.parse(INIT.read_text())
         lazy_imports = [
-            n for n in ast.walk(tree)
-            if isinstance(n, ast.ImportFrom) and n.level == 1 and n.module and n.module.endswith("_engine")
+            n
+            for n in ast.walk(tree)
+            if isinstance(n, ast.ImportFrom)
+            and n.level == 1
+            and n.module
+            and n.module.endswith("_engine")
         ]
         assert not lazy_imports, f"still importing engines eagerly: {lazy_imports}"
 

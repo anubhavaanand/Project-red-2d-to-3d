@@ -41,22 +41,14 @@ class TestUniformSignature:
 class TestLgmBigMovedToInit:
     def test_big_is_an_init_parameter(self):
         tree = ast.parse((ENGINES / "lgm_engine.py").read_text())
-        cls = next(
-            n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "LGMEngine"
-        )
-        init = next(
-            n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == "__init__"
-        )
+        cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "LGMEngine")
+        init = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == "__init__")
         assert "big" in [a.arg for a in init.args.args]
 
     def test_big_defaults_to_true(self):
         tree = ast.parse((ENGINES / "lgm_engine.py").read_text())
-        cls = next(
-            n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "LGMEngine"
-        )
-        init = next(
-            n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == "__init__"
-        )
+        cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "LGMEngine")
+        init = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == "__init__")
         names = [a.arg for a in init.args.args]
         idx = names.index("big")
         offset = len(names) - len(init.args.defaults)

@@ -8,7 +8,6 @@ the GPU by the cleanup block.
 import ast
 from pathlib import Path
 
-
 ENGINE = Path(__file__).parent.parent / "src" / "engines" / "trellis_engine.py"
 
 

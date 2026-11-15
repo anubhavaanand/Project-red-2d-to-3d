@@ -9,7 +9,7 @@ APP_PY = Path(__file__).parent.parent / "app.py"
 
 def _examples_block():
     lines = APP_PY.read_text().splitlines()
-    start = next(i for i, l in enumerate(lines) if l.startswith("EXAMPLES_DIR ="))
+    start = next(i for i, line in enumerate(lines) if line.startswith("EXAMPLES_DIR ="))
     end = next(i for i in range(start, len(lines)) if lines[i].strip() == "]")
     return "\n".join(lines[start : end + 1])
 

@@ -20,7 +20,7 @@ def compute_chamfer_distance(pc1: np.ndarray, pc2: np.ndarray, squared: bool = F
     d1, _ = tree1.query(p2, k=1, workers=-1)
     d2, _ = tree2.query(p1, k=1, workers=-1)
     if squared:
-        return float(np.mean(d1 ** 2) + np.mean(d2 ** 2))
+        return float(np.mean(d1**2) + np.mean(d2**2))
     return float(np.mean(d1) + np.mean(d2))
 
 

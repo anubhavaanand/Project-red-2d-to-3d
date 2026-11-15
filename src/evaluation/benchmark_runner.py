@@ -10,20 +10,20 @@ import json
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Tuple
+from typing import Any
 
 import numpy as np
 import pandas as pd
 import torch
 from PIL import Image
 
-from ..engines.base import AbstractEngine, ReconstructionResult, Mesh3D
+from ..engines.base import AbstractEngine, Mesh3D, ReconstructionResult
 from ..preprocessing.background_removal import BackgroundRemover
 from .metrics import (
     compute_chamfer_distance,
     compute_f_score,
-    compute_psnr,
     compute_lpips,
+    compute_psnr,
     normalize_point_cloud,
 )
 
@@ -42,10 +42,10 @@ GSO_ZUP_TO_YUP_4X4 = np.array(
 class GSOSample:
     sample_id: str
     image_path: Path
-    gt_mesh_path: Optional[Path] = None
-    gt_novel_Views: List[Path] = field(default_factory=list)
-    gt_points: Optional[np.ndarray] = None
-    gt_colors: Optional[np.ndarray] = None
+    gt_mesh_path: Path | None = None
+    gt_novel_Views: list[Path] = field(default_factory=list)
+    gt_points: np.ndarray | None = None
+    gt_colors: np.ndarray | None = None
 
 
 def _srgb_encode_u8(rgb: np.ndarray) -> np.ndarray:
@@ -71,6 +71,7 @@ def _ensure_pyopengl_compat() -> None:
     """
     try:
         import ctypes
+
         from OpenGL.arrays import arraydatatype, ctypesparameters
 
         cparam_type = type(ctypes.byref(ctypes.c_uint(0)))
@@ -89,7 +90,7 @@ def _ensure_pyopengl_compat() -> None:
 _ensure_pyopengl_compat()
 
 
-def _find_gso_texture_image(tm, mesh_path: Optional[str | Path] = None) -> Optional[Image.Image]:
+def _find_gso_texture_image(tm, mesh_path: str | Path | None = None) -> Image.Image | None:
     vis = getattr(tm, "visual", None)
     mat = getattr(vis, "material", None) if vis is not None else None
     img = None
@@ -126,7 +127,7 @@ def _find_gso_texture_image(tm, mesh_path: Optional[str | Path] = None) -> Optio
     return img
 
 
-def bake_texture_to_vertices(tm, mesh_path: Optional[str | Path] = None):
+def bake_texture_to_vertices(tm, mesh_path: str | Path | None = None):
     import trimesh
 
     vis = getattr(tm, "visual", None)
@@ -158,16 +159,23 @@ def bake_texture_to_vertices(tm, mesh_path: Optional[str | Path] = None):
     c10 = im[y0, x1]
     c01 = im[y1, x0]
     c11 = im[y1, x1]
-    c = (1.0 - wx) * (1.0 - wy) * c00 + wx * (1.0 - wy) * c10 + (1.0 - wx) * wy * c01 + wx * wy * c11
-    return trimesh.visual.ColorVisuals(mesh=tm, vertex_colors=np.clip(c.round(), 0, 255).astype(np.uint8))
+    c = (
+        (1.0 - wx) * (1.0 - wy) * c00
+        + wx * (1.0 - wy) * c10
+        + (1.0 - wx) * wy * c01
+        + wx * wy * c11
+    )
+    return trimesh.visual.ColorVisuals(
+        mesh=tm, vertex_colors=np.clip(c.round(), 0, 255).astype(np.uint8)
+    )
 
 
 def load_gso_samples(
     dataset_path: str | Path,
     num_samples: int = 100,
     num_gt_points: int = 10000,
-    object_ids: Optional[List[str]] = None,
-) -> List[GSOSample]:
+    object_ids: list[str] | None = None,
+) -> list[GSOSample]:
     import trimesh
 
     root = Path(dataset_path)
@@ -175,7 +183,7 @@ def load_gso_samples(
         print(f"[GSO Loader] Dataset path not found: {root}")
         return []
 
-    samples: List[GSOSample] = []
+    samples: list[GSOSample] = []
     if object_ids:
         _missing = [o for o in object_ids if not (root / o).is_dir()]
         if _missing:
@@ -187,23 +195,33 @@ def load_gso_samples(
         handpicked_path = Path(__file__).parent.parent.parent / "handpicked.txt"
         if not handpicked_path.exists():
             handpicked_path = Path("/home/anubhavanand/Desktop/reasearch papers/handpicked.txt")
-        
+
         if handpicked_path.exists():
             with open(handpicked_path) as f:
-                object_ids = [line.strip() for line in f if line.strip() and not line.startswith("#")]
+                object_ids = [
+                    line.strip() for line in f if line.strip() and not line.startswith("#")
+                ]
             _missing = [o for o in object_ids if not (root / o).is_dir()]
             if _missing:
-                print(f"[GSO Loader] WARNING: {len(_missing)} handpicked objects not found in dataset")
+                print(
+                    f"[GSO Loader] WARNING: {len(_missing)} handpicked objects not found in dataset"
+                )
             obj_dirs = [root / o for o in object_ids if (root / o).is_dir()][:num_samples]
             print(f"[GSO Loader] using handpicked.txt ({len(obj_dirs)} objects)")
         else:
             obj_dirs = sorted([d for d in root.iterdir() if d.is_dir()])[:num_samples]
-            print(f"[GSO Loader] WARNING: No handpicked.txt found, using alphabetical order ({len(obj_dirs)} objects)")
+            print(
+                f"[GSO Loader] WARNING: No handpicked.txt found, using alphabetical order ({len(obj_dirs)} objects)"
+            )
 
     for obj_dir in obj_dirs:
         if (obj_dir / "images" / "000.png").exists():
             image_path = obj_dir / "images" / "000.png"
-            novel_views = [obj_dir / "images" / "001.png"] if (obj_dir / "images" / "001.png").exists() else []
+            novel_views = (
+                [obj_dir / "images" / "001.png"]
+                if (obj_dir / "images" / "001.png").exists()
+                else []
+            )
         else:
             img_candidates = (
                 list((obj_dir / "images").glob("*.png"))
@@ -239,7 +257,10 @@ def load_gso_samples(
                     pass
                 pts, face_idx = trimesh.sample.sample_surface(mesh, num_gt_points)
                 gt_points = normalize_point_cloud(np.array(pts, dtype=np.float32))
-                if getattr(mesh.visual, "kind", None) == "vertex" and getattr(mesh.visual, "vertex_colors", None) is not None:
+                if (
+                    getattr(mesh.visual, "kind", None) == "vertex"
+                    and getattr(mesh.visual, "vertex_colors", None) is not None
+                ):
                     vc = np.asarray(mesh.visual.vertex_colors[:, :3], dtype=np.float32)
                     if vc.max() > 1.05:
                         vc = vc / 255.0
@@ -270,7 +291,7 @@ def load_gso_samples(
     return samples
 
 
-def _normalize_vertices_robust(verts: np.ndarray) -> Tuple[np.ndarray, np.ndarray, float]:
+def _normalize_vertices_robust(verts: np.ndarray) -> tuple[np.ndarray, np.ndarray, float]:
     v = np.asarray(verts, dtype=np.float32)
     if len(v) == 0:
         return v, np.zeros(3, dtype=np.float32), 1.0
@@ -283,7 +304,7 @@ def _normalize_vertices_robust(verts: np.ndarray) -> Tuple[np.ndarray, np.ndarra
     return vc / (scale + 1e-8), bbox_center, scale
 
 
-def _candidate_rotations(n_yaw: int = 12) -> List[np.ndarray]:
+def _candidate_rotations(n_yaw: int = 12) -> list[np.ndarray]:
     base_orientations = [
         np.eye(3, dtype=np.float32),
         np.array([[1, 0, 0], [0, -1, 0], [0, 0, -1]], dtype=np.float32),
@@ -302,7 +323,7 @@ def _candidate_rotations(n_yaw: int = 12) -> List[np.ndarray]:
     return rots
 
 
-def _upright_yaw_rotations(n_yaw: int = 24) -> List[np.ndarray]:
+def _upright_yaw_rotations(n_yaw: int = 24) -> list[np.ndarray]:
     """
     Generate upright candidate rotations combining full 360-deg Y-axis yaw search
     with small camera-elevation pitch adjustments (-15, 0, +15 deg around X/Z)
@@ -313,8 +334,12 @@ def _upright_yaw_rotations(n_yaw: int = 24) -> List[np.ndarray]:
     pitch_bases = [np.eye(3, dtype=np.float32)]
     for pa in pitch_angles[1:]:
         cp, sp = np.cos(pa), np.sin(pa)
-        pitch_bases.append(np.array([[1.0, 0.0, 0.0], [0.0, cp, -sp], [0.0, sp, cp]], dtype=np.float32))
-        pitch_bases.append(np.array([[cp, -sp, 0.0], [sp, cp, 0.0], [0.0, 0.0, 1.0]], dtype=np.float32))
+        pitch_bases.append(
+            np.array([[1.0, 0.0, 0.0], [0.0, cp, -sp], [0.0, sp, cp]], dtype=np.float32)
+        )
+        pitch_bases.append(
+            np.array([[cp, -sp, 0.0], [sp, cp, 0.0], [0.0, 0.0, 1.0]], dtype=np.float32)
+        )
 
     rots = []
     for i in range(n_yaw):
@@ -331,8 +356,8 @@ def align_mesh_to_gt(
     gt_points: np.ndarray,
     num_points: int = 10000,
     n_iter: int = 5,
-    gt_colors: Optional[np.ndarray] = None,
-) -> Tuple[Mesh3D, np.ndarray]:
+    gt_colors: np.ndarray | None = None,
+) -> tuple[Mesh3D, np.ndarray]:
     import trimesh
     from scipy.spatial import cKDTree
 
@@ -364,8 +389,6 @@ def align_mesh_to_gt(
     gt_tree = cKDTree(g_sub)
 
     best_cd = float("inf")
-    best_R = np.eye(3, dtype=np.float32)
-    best_t = np.zeros(3, dtype=np.float32)
 
     for R_init in _candidate_rotations(12):
         R_total = R_init.copy()
@@ -394,8 +417,6 @@ def align_mesh_to_gt(
         cd = float(np.mean(d_p2g) + np.mean(d_g2p))
         if cd < best_cd:
             best_cd = cd
-            best_R = R_total
-            best_t = t_total
 
     # Upright-locked + color-aware alignment for visual mesh rendering so novel views
     # never flip upside-down, 90-deg sideways, or 180-deg backwards on symmetric shapes.
@@ -452,7 +473,9 @@ def align_mesh_to_gt(
     return aligned_mesh, aligned_pts.astype(np.float32)
 
 
-def make_camera_pose(azimuth_deg: float, elevation_deg: float = 15.0, distance: float = 2.45) -> np.ndarray:
+def make_camera_pose(
+    azimuth_deg: float, elevation_deg: float = 15.0, distance: float = 2.45
+) -> np.ndarray:
     az = np.radians(azimuth_deg)
     el = np.radians(elevation_deg)
     cam_pos = np.array(
@@ -476,7 +499,9 @@ def make_camera_pose(azimuth_deg: float, elevation_deg: float = 15.0, distance: 
     return pose
 
 
-def _add_three_point_lights(scene, azimuth_deg: float, elevation_deg: float, distance: float) -> np.ndarray:
+def _add_three_point_lights(
+    scene, azimuth_deg: float, elevation_deg: float, distance: float
+) -> np.ndarray:
     import pyrender
 
     key_pose = make_camera_pose(azimuth_deg, elevation_deg, distance)
@@ -496,14 +521,18 @@ def render_novel_view_same_bg(
     resolution: int = 256,
     white_bg: bool = True,
     already_normalized: bool = False,
-) -> Optional[np.ndarray]:
+) -> np.ndarray | None:
     try:
         _ensure_pyopengl_compat()
-        import trimesh
         import pyrender
+        import trimesh
 
         raw_v = np.asarray(mesh.vertices, dtype=np.float32)
-        max_r = float(np.linalg.norm(raw_v - raw_v.mean(axis=0), axis=1).max()) if len(raw_v) > 0 else 1.0
+        max_r = (
+            float(np.linalg.norm(raw_v - raw_v.mean(axis=0), axis=1).max())
+            if len(raw_v) > 0
+            else 1.0
+        )
         if not already_normalized or max_r < 0.6 or max_r > 1.6:
             verts, _, _ = _normalize_vertices_robust(raw_v)
         else:
@@ -512,13 +541,15 @@ def render_novel_view_same_bg(
         uv_coords = getattr(mesh, "uv_coords", None)
         tex_map = getattr(mesh, "texture_map", None)
         use_native_uv = (
-            uv_coords is not None
-            and tex_map is not None
-            and len(uv_coords) == len(verts)
+            uv_coords is not None and tex_map is not None and len(uv_coords) == len(verts)
         )
 
         vc_lin = None
-        if not use_native_uv and mesh.vertex_colors is not None and len(mesh.vertex_colors) == len(verts):
+        if (
+            not use_native_uv
+            and mesh.vertex_colors is not None
+            and len(mesh.vertex_colors) == len(verts)
+        ):
             vc = np.asarray(mesh.vertex_colors, dtype=np.float32)[:, :3]
             if vc.max() > 1.05:
                 vc = vc / 255.0
@@ -527,7 +558,7 @@ def render_novel_view_same_bg(
             # but NOT to vertex colors (color_0), and then applies pow(color, 1/2.2) at output.
             # Pre-converting sRGB vertex colors to linear RGB via pow(c, 2.2) eliminates the
             # double-gamma washout and matches the UV-texture shading curve identically.
-            vc_lin = (vc_srgb ** 2.2).astype(np.float32)
+            vc_lin = (vc_srgb**2.2).astype(np.float32)
 
         tm = trimesh.Trimesh(
             vertices=verts,
@@ -540,10 +571,14 @@ def render_novel_view_same_bg(
             pass
 
         if use_native_uv:
-            tm.visual = trimesh.visual.TextureVisuals(uv=np.asarray(uv_coords, dtype=np.float32), image=tex_map)
+            tm.visual = trimesh.visual.TextureVisuals(
+                uv=np.asarray(uv_coords, dtype=np.float32), image=tex_map
+            )
             mat = pyrender.MetallicRoughnessMaterial(
                 baseColorFactor=[1.0, 1.0, 1.0, 1.0],
-                baseColorTexture=tex_map.convert("RGBA") if hasattr(tex_map, "convert") else tex_map,
+                baseColorTexture=tex_map.convert("RGBA")
+                if hasattr(tex_map, "convert")
+                else tex_map,
                 metallicFactor=0.0,
                 roughnessFactor=1.0,
                 alphaMode="OPAQUE",
@@ -578,9 +613,7 @@ def render_novel_view_same_bg(
         if white_bg:
             color = color.copy()
             color[depth == 0] = 255
-        color = np.array(
-            Image.fromarray(color).resize((resolution, resolution), Image.LANCZOS)
-        )
+        color = np.array(Image.fromarray(color).resize((resolution, resolution), Image.LANCZOS))
         if use_native_uv:
             color = _srgb_encode_u8(color)
         else:
@@ -599,12 +632,12 @@ def render_gso_mesh_view(
     distance: float = 2.45,
     resolution: int = 256,
     return_rgba: bool = False,
-) -> Optional[np.ndarray]:
+) -> np.ndarray | None:
     """Render a GSO ground-truth mesh preserving its native 4096x4096 UV texture map."""
     try:
         _ensure_pyopengl_compat()
-        import trimesh
         import pyrender
+        import trimesh
 
         tm = trimesh.load(str(mesh_path), force="mesh")
         if tm is None or len(tm.faces) == 0:
@@ -624,10 +657,8 @@ def render_gso_mesh_view(
         if uv is not None and len(uv) == len(tm.vertices) and tex_img is not None:
             # Attach UV and texture to trimesh visual before rendering
             import trimesh.visual
-            tm.visual = trimesh.visual.TextureVisuals(
-                uv=uv,
-                image=tex_img.convert("RGBA")
-            )
+
+            tm.visual = trimesh.visual.TextureVisuals(uv=uv, image=tex_img.convert("RGBA"))
             mat = pyrender.MetallicRoughnessMaterial(
                 baseColorFactor=[1.0, 1.0, 1.0, 1.0],
                 baseColorTexture=tex_img.convert("RGBA"),
@@ -681,11 +712,11 @@ def render_gso_mesh_view(
             alpha = ((depth > 0).astype(np.uint8) * 255)[..., None]
             rgba_hi = np.concatenate([color, alpha], axis=-1)
             return np.array(
-                Image.fromarray(rgba_hi, mode="RGBA").resize((resolution, resolution), Image.LANCZOS)
+                Image.fromarray(rgba_hi, mode="RGBA").resize(
+                    (resolution, resolution), Image.LANCZOS
+                )
             )
-        return np.array(
-            Image.fromarray(color).resize((resolution, resolution), Image.LANCZOS)
-        )
+        return np.array(Image.fromarray(color).resize((resolution, resolution), Image.LANCZOS))
     except Exception as e:
         print(f"[GT Renderer] failed ({e})")
         return None
@@ -698,14 +729,14 @@ class BenchmarkRunner:
     def __init__(
         self,
         dataset_path: str | Path,
-        engines: List[AbstractEngine],
+        engines: list[AbstractEngine],
         num_samples: int = 100,
         num_points: int = 10000,
         output_dir: str | Path = "outputs",
-        object_ids: Optional[List[str]] = None,
-        resume_json_path: Optional[str | Path] = None,
+        object_ids: list[str] | None = None,
+        resume_json_path: str | Path | None = None,
         save_mesh_limit: int = 100,
-        max_wall_minutes: Optional[float] = None,
+        max_wall_minutes: float | None = None,
     ):
         self.dataset_path = Path(dataset_path)
         self.engines = engines
@@ -720,16 +751,21 @@ class BenchmarkRunner:
         self._t_runner_start = time.perf_counter()
         self._stop_requested = False
         self._meshes_saved = 0
-        self.results: List[Dict[str, Any]] = []
+        self.results: list[dict[str, Any]] = []
         if resume_json_path and Path(resume_json_path).exists():
             try:
                 prior = json.loads(Path(resume_json_path).read_text())
                 if isinstance(prior, list):
                     self.results = [
-                        r for r in prior
-                        if isinstance(r, dict) and r.get("chamfer_distance") is not None and not pd.isna(r.get("chamfer_distance"))
+                        r
+                        for r in prior
+                        if isinstance(r, dict)
+                        and r.get("chamfer_distance") is not None
+                        and not pd.isna(r.get("chamfer_distance"))
                     ]
-                    print(f"[BenchmarkRunner] Resumed {len(self.results)} completed rows from {resume_json_path} ✅")
+                    print(
+                        f"[BenchmarkRunner] Resumed {len(self.results)} completed rows from {resume_json_path} ✅"
+                    )
             except Exception as e:
                 print(f"[BenchmarkRunner] Resume load warning: {e}")
 
@@ -739,7 +775,7 @@ class BenchmarkRunner:
         azimuth_deg: float = 65.0,
         elevation_deg: float = 15.0,
         resolution: int = 256,
-    ) -> Optional[np.ndarray]:
+    ) -> np.ndarray | None:
         return render_gso_mesh_view(
             mesh_path,
             azimuth_deg=azimuth_deg,
@@ -759,9 +795,13 @@ class BenchmarkRunner:
             raise RuntimeError(f"No valid GSO samples found in {self.dataset_path}")
 
         import signal
+
         def _sig_handler(signum, _frame):
-            print(f"\n[BenchmarkRunner] Caught signal {signum} — stopping gracefully after current step so outputs are saved!")
+            print(
+                f"\n[BenchmarkRunner] Caught signal {signum} — stopping gracefully after current step so outputs are saved!"
+            )
             self._stop_requested = True
+
         try:
             signal.signal(signal.SIGTERM, _sig_handler)
             signal.signal(signal.SIGINT, _sig_handler)
@@ -772,10 +812,15 @@ class BenchmarkRunner:
             info = engine.get_engine_info()
             engine_name = info.get("name", engine.__class__.__name__)
             done_ids = {
-                r.get("sample_id") for r in self.results
-                if r.get("engine") == engine_name and r.get("chamfer_distance") is not None and not pd.isna(r.get("chamfer_distance"))
+                r.get("sample_id")
+                for r in self.results
+                if r.get("engine") == engine_name
+                and r.get("chamfer_distance") is not None
+                and not pd.isna(r.get("chamfer_distance"))
             }
-            print(f"\n{'='*60}\n  Evaluating: {engine_name} (already completed: {len(done_ids)}/{len(samples)})\n{'='*60}")
+            print(
+                f"\n{'=' * 60}\n  Evaluating: {engine_name} (already completed: {len(done_ids)}/{len(samples)})\n{'=' * 60}"
+            )
             self._meshes_saved = 0
             if len(done_ids) >= len(samples):
                 print(f"  [{engine_name}] All {len(samples)} samples already completed! Skipping.")
@@ -785,18 +830,24 @@ class BenchmarkRunner:
 
             for idx, sample in enumerate(samples):
                 if self._stop_requested:
-                    print(f"  [{engine_name}] Graceful stop requested at ({idx+1}/{len(samples)}). Flushing results...")
+                    print(
+                        f"  [{engine_name}] Graceful stop requested at ({idx + 1}/{len(samples)}). Flushing results..."
+                    )
                     break
                 if self.max_wall_minutes is not None:
                     elapsed_min = (time.perf_counter() - self._t_runner_start) / 60.0
                     if elapsed_min >= self.max_wall_minutes:
-                        print(f"  [{engine_name}] Reached max_wall_minutes={self.max_wall_minutes:.1f}m (elapsed={elapsed_min:.1f}m) at ({idx+1}/{len(samples)}). Stopping cleanly!")
+                        print(
+                            f"  [{engine_name}] Reached max_wall_minutes={self.max_wall_minutes:.1f}m (elapsed={elapsed_min:.1f}m) at ({idx + 1}/{len(samples)}). Stopping cleanly!"
+                        )
                         break
                 if sample.sample_id in done_ids:
-                    print(f"  [{engine_name}] ({idx+1}/{len(samples)}) {sample.sample_id} -> CACHED (CD={next(r['chamfer_distance'] for r in self.results if r.get('engine')==engine_name and r.get('sample_id')==sample.sample_id):.4f}) ✅")
+                    print(
+                        f"  [{engine_name}] ({idx + 1}/{len(samples)}) {sample.sample_id} -> CACHED (CD={next(r['chamfer_distance'] for r in self.results if r.get('engine') == engine_name and r.get('sample_id') == sample.sample_id):.4f}) ✅"
+                    )
                     continue
                 print(
-                    f"  [{engine_name}] ({idx+1}/{len(samples)}) {sample.sample_id} ...",
+                    f"  [{engine_name}] ({idx + 1}/{len(samples)}) {sample.sample_id} ...",
                     end=" ",
                     flush=True,
                 )
@@ -820,17 +871,20 @@ class BenchmarkRunner:
                         else 0.0
                     )
 
-                    row: Dict[str, Any] = {
+                    row: dict[str, Any] = {
                         "engine": engine_name,
                         "sample_id": sample.sample_id,
                         "latency_s": round(latency, 4),
                         "vram_peak_gb": round(vram_gb, 2),
                     }
 
-                    aligned_for_render: Optional[Mesh3D] = None
+                    aligned_for_render: Mesh3D | None = None
                     if recon.mesh is not None and sample.gt_points is not None:
                         aligned_for_render, pred_pts = align_mesh_to_gt(
-                            recon.mesh, sample.gt_points, self.num_points, gt_colors=sample.gt_colors
+                            recon.mesh,
+                            sample.gt_points,
+                            self.num_points,
+                            gt_colors=sample.gt_colors,
                         )
                         row["chamfer_distance"] = compute_chamfer_distance(
                             pred_pts, sample.gt_points
@@ -872,12 +926,16 @@ class BenchmarkRunner:
                             gt_render_hi = np.array(gt_img)
 
                         pred_render = (
-                            np.array(Image.fromarray(pred_render_hi).resize((256, 256), Image.LANCZOS))
+                            np.array(
+                                Image.fromarray(pred_render_hi).resize((256, 256), Image.LANCZOS)
+                            )
                             if pred_render_hi is not None
                             else None
                         )
                         gt_render = (
-                            np.array(Image.fromarray(gt_render_hi).resize((256, 256), Image.LANCZOS))
+                            np.array(
+                                Image.fromarray(gt_render_hi).resize((256, 256), Image.LANCZOS)
+                            )
                             if gt_render_hi is not None
                             else None
                         )
@@ -897,9 +955,9 @@ class BenchmarkRunner:
                                 Image.fromarray(gt_render_hi).save(qdir / "gt_novel.png")
                             if not (qdir / "input.png").exists():
                                 _bg_w = Image.new("RGBA", clean_img.size, (255, 255, 255, 255))
-                                Image.alpha_composite(_bg_w, clean_img.convert("RGBA")).convert("RGB").save(
-                                    qdir / "input.png"
-                                )
+                                Image.alpha_composite(_bg_w, clean_img.convert("RGBA")).convert(
+                                    "RGB"
+                                ).save(qdir / "input.png")
                         # Mesh export is independent of render success: a PSNR render
                         # failure must not cost us the geometry. Counter-based so that
                         # resumed/cached rows cannot starve fresh ones (the old idx gate
@@ -909,6 +967,7 @@ class BenchmarkRunner:
                             qdir.mkdir(parents=True, exist_ok=True)
                             try:
                                 import trimesh as _tm
+
                                 vc_out = None
                                 if render_target.vertex_colors is not None:
                                     vc = np.asarray(render_target.vertex_colors, dtype=np.float32)

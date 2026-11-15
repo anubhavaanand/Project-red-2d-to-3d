@@ -8,12 +8,8 @@ ENGINE = Path(__file__).parent.parent / "src" / "engines" / "trellis_engine.py"
 
 def _init_body():
     tree = ast.parse(ENGINE.read_text())
-    cls = next(
-        n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "TrellisEngine"
-    )
-    init = next(
-        n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == "__init__"
-    )
+    cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "TrellisEngine")
+    init = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == "__init__")
     return init
 
 

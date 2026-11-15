@@ -26,9 +26,7 @@ def unload_model():
     src = BASE.read_text()
     tree = ast.parse(src)
     fn = next(
-        n
-        for n in ast.walk(tree)
-        if isinstance(n, ast.FunctionDef) and n.name == "unload_model"
+        n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "unload_model"
     )
     body = ast.unparse(fn)
     # drop the decorator-free def, exec in a throwaway namespace
@@ -88,9 +86,7 @@ class TestInterface:
         runner = Path(__file__).parent.parent / "src" / "evaluation" / "benchmark_runner.py"
         assert 'hasattr(engine, "unload_model")' in runner.read_text()
 
-    @pytest.mark.parametrize(
-        "engine_file", ["lgm_engine.py", "trellis_engine.py"]
-    )
+    @pytest.mark.parametrize("engine_file", ["lgm_engine.py", "trellis_engine.py"])
     def test_heavy_engines_override_and_free_cuda(self, engine_file):
         src = (BASE.parent / engine_file).read_text()
         assert "def unload_model(self) -> None:" in src

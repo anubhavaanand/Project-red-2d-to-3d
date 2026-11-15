@@ -59,9 +59,7 @@ class TestImportPlacement:
 
     def test_spar3d_defers_scipy_into_the_colour_helper(self):
         src = (ENGINES / "spar3d_engine.py").read_text()
-        helper = src[
-            src.index("def _extract_spar3d_vertex_colors") : src.index("def predict")
-        ]
+        helper = src[src.index("def _extract_spar3d_vertex_colors") : src.index("def predict")]
         assert "from scipy.spatial import cKDTree" in helper
 
 
@@ -89,17 +87,11 @@ class TestStartupCost:
     def test_importing_engines_module_is_cheap(self):
         """The package __init__ must not pull in the engine modules."""
         src = (ENGINES / "__init__.py").read_text()
-        for f, _m, _s in DEFERRED:
-            pass  # covered above; this test guards the package import path
         assert "from .lgm_engine import" not in src
         assert "from .spar3d_engine import" not in src
         assert "from .trellis_engine import" not in src
 
     def test_engines_init_imports_only_base(self):
         tree = ast.parse((ENGINES / "__init__.py").read_text())
-        eager = [
-            n.module
-            for n in tree.body
-            if isinstance(n, ast.ImportFrom) and n.level == 1
-        ]
+        eager = [n.module for n in tree.body if isinstance(n, ast.ImportFrom) and n.level == 1]
         assert eager == ["base"], f"unexpected eager imports: {eager}"

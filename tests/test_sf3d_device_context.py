@@ -45,5 +45,5 @@ class TestDeviceSemantics:
             assert is_cuda == (device != "cpu")
 
     def test_guard_matches_torch_semantics(self):
-        assert not str("cpu").startswith("cuda")
-        assert str("cuda:0").startswith("cuda")
+        assert not "cpu".startswith("cuda")
+        assert "cuda:0".startswith("cuda")

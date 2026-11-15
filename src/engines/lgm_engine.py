@@ -15,17 +15,17 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Any
 
 import numpy as np
 import torch
 from PIL import Image
 
-from .base import AbstractEngine, ReconstructionResult, Mesh3D, GaussianCloud
 from ._compat import lgm_xformers_shim
-from ._paths import extend_sys_path
-from ._memory import free_cuda_cache
 from ._mask import derive_foreground_mask
+from ._memory import free_cuda_cache
+from ._paths import extend_sys_path
+from .base import AbstractEngine, GaussianCloud, Mesh3D, ReconstructionResult
 
 LGM_NEGATIVE_PROMPT = (
     "ugly, blurry, pixelated obscure, unnatural colors, poor lighting, "
@@ -137,14 +137,14 @@ class LGMEngine(AbstractEngine):
         # so it cannot leak a fake API into unrelated imports.
         with lgm_xformers_shim():
             self._ensure_lgm_imports()
-            from diffusers import DDIMScheduler
-            from mvdream.pipeline_mvdream import MVDreamPipeline
-            from core.options import Options, config_defaults
             from core.models import LGM
+            from core.options import Options, config_defaults
+            from diffusers import DDIMScheduler
 
             # ENG-45: import the download/checkpoint stack here, not at module
             # import, so importing this engine stays cheap.
             from huggingface_hub import hf_hub_download
+            from mvdream.pipeline_mvdream import MVDreamPipeline
             from safetensors.torch import load_file
 
             print("[LGM] Loading U-Net from ashawkey/LGM …")
@@ -160,15 +160,20 @@ class LGMEngine(AbstractEngine):
 
             # Warn about dropped keys
             dropped_keys = [k for k in ckpt.keys() if k not in model_sd]
-            mismatched_shapes = [k for k in ckpt.keys() if k in model_sd and model_sd[k].shape != ckpt[k].shape]
+            mismatched_shapes = [
+                k for k in ckpt.keys() if k in model_sd and model_sd[k].shape != ckpt[k].shape
+            ]
             if dropped_keys:
-                print(f"[LGM] WARNING: Dropping {len(dropped_keys)} checkpoint keys not in model: {dropped_keys[:5]}...")
+                print(
+                    f"[LGM] WARNING: Dropping {len(dropped_keys)} checkpoint keys not in model: {dropped_keys[:5]}..."
+                )
             if mismatched_shapes:
-                print(f"[LGM] WARNING: Dropping {len(mismatched_shapes)} checkpoint keys with shape mismatch: {mismatched_shapes[:5]}...")
+                print(
+                    f"[LGM] WARNING: Dropping {len(mismatched_shapes)} checkpoint keys with shape mismatch: {mismatched_shapes[:5]}..."
+                )
 
             filtered = {
-                k: v for k, v in ckpt.items()
-                if k in model_sd and model_sd[k].shape == v.shape
+                k: v for k, v in ckpt.items() if k in model_sd and model_sd[k].shape == v.shape
             }
             self.model.load_state_dict(filtered, strict=False)
             self.model = self.model.half().to(self.device).eval()
@@ -179,6 +184,7 @@ class LGMEngine(AbstractEngine):
         # verified clean (no subprocess/eval/file writes/network calls), and pinning
         # the revision prevents the code from changing without our knowledge.
         from huggingface_hub import snapshot_download
+
         _mv_local = snapshot_download(
             "ashawkey/imagedream-ipmv-diffusers",
             revision="73a0341",  # pinned commit — do not change without security review
@@ -187,16 +193,14 @@ class LGMEngine(AbstractEngine):
             _mv_local,
             torch_dtype=torch.float16,
         ).to(self.device)
-        self.mv_pipeline.scheduler = DDIMScheduler.from_config(
-            self.mv_pipeline.scheduler.config
-        )
+        self.mv_pipeline.scheduler = DDIMScheduler.from_config(self.mv_pipeline.scheduler.config)
         self.rays_embeddings = self.model.prepare_default_rays(self.device)
 
         print("[LGM] Model loaded.")
 
     def predict(self, image: Image.Image, extract_mesh: bool = True) -> ReconstructionResult:
-        import torch.nn.functional as F
         import kiui
+        import torch.nn.functional as F
 
         if self.model is None or self.mv_pipeline is None:
             self.load_model()
@@ -268,7 +272,7 @@ class LGMEngine(AbstractEngine):
         B, C, H, W = g.shape
         assert C == 14, f"Expected 14 channels, got {C}"
         g = g.transpose(0, 2, 3, 1).reshape(-1, 14)  # (B, H, W, 14) -> (B*H*W, 14)
-        
+
         pos = g[:, 0:3]
         opa = g[:, 3:4]
         scl = g[:, 4:7]
@@ -318,9 +322,7 @@ class LGMEngine(AbstractEngine):
             },
         )
 
-    def _gaussians_to_mesh(
-        self, gaussians: GaussianCloud, resolution: int = 256
-    ) -> Optional[Mesh3D]:
+    def _gaussians_to_mesh(self, gaussians: GaussianCloud, resolution: int = 256) -> Mesh3D | None:
         try:
             import trimesh
             from scipy.spatial import cKDTree
@@ -373,7 +375,7 @@ class LGMEngine(AbstractEngine):
 
             _k, _sigma = 7, 1.10
             _ax = torch.arange(_k, dtype=torch.float32) - (_k - 1) / 2.0
-            _g = torch.exp(-(_ax ** 2) / (2.0 * (_sigma ** 2)))
+            _g = torch.exp(-(_ax**2) / (2.0 * (_sigma**2)))
             _g = (_g / _g.sum()).view(1, 1, _k, 1, 1)
             _pad = _k // 2
             g4 = grid.unsqueeze(0).unsqueeze(0)
@@ -431,7 +433,11 @@ class LGMEngine(AbstractEngine):
             if int(core_mask.sum()) < 100:
                 core_mask = opa_fg > 0.20
             if int(core_mask.sum()) >= 100:
-                pos_color, rgb_color, opa_color = pos_fg[core_mask], rgb_fg[core_mask], opa_fg[core_mask]
+                pos_color, rgb_color, opa_color = (
+                    pos_fg[core_mask],
+                    rgb_fg[core_mask],
+                    opa_fg[core_mask],
+                )
             else:
                 pos_color, rgb_color, opa_color = pos_fg, rgb_fg, opa_fg
 
@@ -441,7 +447,7 @@ class LGMEngine(AbstractEngine):
             if k == 1 or idx_k.ndim == 1:
                 vertex_colors = np.clip(rgb_color[idx_k], 0.0, 1.0)
             else:
-                weights = (opa_color[idx_k] ** 2) / (dists_k ** 2 + 1e-6)
+                weights = (opa_color[idx_k] ** 2) / (dists_k**2 + 1e-6)
                 weights /= weights.sum(axis=1, keepdims=True)
                 vertex_colors = np.clip(
                     (rgb_color[idx_k] * weights[..., None]).sum(axis=1), 0.0, 1.0
@@ -470,7 +476,7 @@ class LGMEngine(AbstractEngine):
             torch.cuda.empty_cache()
             torch.cuda.ipc_collect()
 
-    def get_engine_info(self) -> Dict[str, Any]:
+    def get_engine_info(self) -> dict[str, Any]:
         return {
             "name": "LGM",
             "paper": "arXiv:2402.05054",

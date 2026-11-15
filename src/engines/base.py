@@ -1,16 +1,18 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional, Dict, Any
+from typing import Any
+
 import numpy as np
 from PIL import Image
+
 
 @dataclass
 class Mesh3D:
     vertices: np.ndarray
     faces: np.ndarray
-    vertex_colors: Optional[np.ndarray] = None
-    uv_coords: Optional[np.ndarray] = None
-    texture_map: Optional[Image.Image] = None
+    vertex_colors: np.ndarray | None = None
+    uv_coords: np.ndarray | None = None
+    texture_map: Image.Image | None = None
 
     def validate(self) -> None:
         """Raise ValueError if this mesh is structurally inconsistent.
@@ -28,18 +30,14 @@ class Mesh3D:
         if len(v) == 0:
             raise ValueError("mesh has no vertices")
         if len(f) and int(f.max()) >= len(v):
-            raise ValueError(
-                f"face index {int(f.max())} out of range for {len(v)} vertices"
-            )
+            raise ValueError(f"face index {int(f.max())} out of range for {len(v)} vertices")
         if not np.isfinite(v).all():
             raise ValueError("vertices contain non-finite values")
 
         if self.vertex_colors is not None:
             vc = np.asarray(self.vertex_colors)
             if len(vc) != len(v):
-                raise ValueError(
-                    f"vertex_colors length {len(vc)} != vertices length {len(v)}"
-                )
+                raise ValueError(f"vertex_colors length {len(vc)} != vertices length {len(v)}")
             if vc.ndim != 2 or vc.shape[1] < 3:
                 raise ValueError(f"vertex_colors must be (N, >=3), got {vc.shape}")
             if not np.isfinite(vc).all():
@@ -48,9 +46,7 @@ class Mesh3D:
         if self.uv_coords is not None:
             uv = np.asarray(self.uv_coords)
             if len(uv) != len(v):
-                raise ValueError(
-                    f"uv_coords length {len(uv)} != vertices length {len(v)}"
-                )
+                raise ValueError(f"uv_coords length {len(uv)} != vertices length {len(v)}")
 
 
 @dataclass
@@ -80,32 +76,32 @@ class GaussianCloud:
             if name in ("sh_coeffs",):
                 continue
             if len(arr) != n:
-                raise ValueError(
-                    f"{name} length {len(arr)} != positions length {n}"
-                )
+                raise ValueError(f"{name} length {len(arr)} != positions length {n}")
             if not np.isfinite(arr).all():
                 raise ValueError(f"{name} contains non-finite values")
 
         if not np.isfinite(arrays["sh_coeffs"]).all():
             raise ValueError("sh_coeffs contains non-finite values")
 
+
 @dataclass
 class ReconstructionResult:
-    mesh: Optional[Mesh3D] = None
-    gaussians: Optional[GaussianCloud] = None
-    metadata: Optional[Dict[str, Any]] = None
+    mesh: Mesh3D | None = None
+    gaussians: GaussianCloud | None = None
+    metadata: dict[str, Any] | None = None
+
 
 class AbstractEngine(ABC):
     @abstractmethod
     def load_model(self) -> None:
         pass
-        
+
     @abstractmethod
     def predict(self, image: Image.Image) -> ReconstructionResult:
         pass
-        
+
     @abstractmethod
-    def get_engine_info(self) -> Dict[str, Any]:
+    def get_engine_info(self) -> dict[str, Any]:
         pass
 
     def unload_model(self) -> None:
@@ -118,10 +114,24 @@ class AbstractEngine(ABC):
         """
         for name in list(vars(self)):
             # Keep the scalar configuration; drop anything holding model state.
-            if name in ("device", "dev", "output_format", "chunk_size", "resolution",
-                        "texture_resolution", "low_vram_mode", "foreground_ratio",
-                        "mv_guidance_scale", "mv_num_inference_steps", "elevation",
-                        "slat_steps", "sparse_steps", "sparse_cfg_strength",
-                        "slat_cfg_strength", "cfg_strength", "staged_offload"):
+            if name in (
+                "device",
+                "dev",
+                "output_format",
+                "chunk_size",
+                "resolution",
+                "texture_resolution",
+                "low_vram_mode",
+                "foreground_ratio",
+                "mv_guidance_scale",
+                "mv_num_inference_steps",
+                "elevation",
+                "slat_steps",
+                "sparse_steps",
+                "sparse_cfg_strength",
+                "slat_cfg_strength",
+                "cfg_strength",
+                "staged_offload",
+            ):
                 continue
             setattr(self, name, None)

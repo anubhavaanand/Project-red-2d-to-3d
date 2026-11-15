@@ -9,9 +9,7 @@ ENGINE = Path(__file__).parent.parent / "src" / "engines" / "sf3d_engine.py"
 def _summarise():
     tree = ast.parse(ENGINE.read_text())
     fn = next(
-        n
-        for n in tree.body
-        if isinstance(n, ast.FunctionDef) and n.name == "_summarize_glob_dict"
+        n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "_summarize_glob_dict"
     )
     ns = {}
     exec(compile(ast.Module(body=[fn], type_ignores=[]), str(ENGINE), "exec"), ns)

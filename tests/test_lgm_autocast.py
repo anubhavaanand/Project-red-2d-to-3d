@@ -11,9 +11,7 @@ class TestAutocastDevice:
     def test_autocast_is_not_hardcoded_to_cuda(self):
         """ENG-15: the literal device_type="cuda" must be gone from real code."""
         src = ENGINE.read_text()
-        code = "\n".join(
-            line for line in src.splitlines() if not line.lstrip().startswith("#")
-        )
+        code = "\n".join(line for line in src.splitlines() if not line.lstrip().startswith("#"))
         assert 'device_type="cuda"' not in code
 
     def test_device_type_derived_from_engine_device(self):
@@ -21,7 +19,7 @@ class TestAutocastDevice:
         assert "device_type=device_type" in src
 
     def test_device_index_is_stripped(self):
-        """"cuda:0" is a valid torch device but not a valid autocast type."""
+        """ "cuda:0" is a valid torch device but not a valid autocast type."""
         src = ENGINE.read_text()
         assert 'str(self.device).split(":")[0]' in src
 
@@ -36,9 +34,7 @@ class TestAutocastDevice:
         Comments are stripped first so the explanatory text does not count.
         """
         src = ENGINE.read_text()
-        code = "\n".join(
-            line for line in src.splitlines() if not line.lstrip().startswith("#")
-        )
+        code = "\n".join(line for line in src.splitlines() if not line.lstrip().startswith("#"))
         assert len(re.findall(r"torch\.autocast\(", code)) == 1
 
     def test_engine_parses(self):

@@ -17,8 +17,12 @@ def _output_dir_source():
     try/except belongs to a wider scope than the statements we need.
     """
     lines = APP_PY.read_text().splitlines()
-    start = next(i for i, l in enumerate(lines) if l.startswith("OUTPUT_DIR ="))
-    end = next(i for i in range(start, len(lines)) if lines[i].strip() == "pass" and lines[i].startswith("    "))
+    start = next(i for i, line in enumerate(lines) if line.startswith("OUTPUT_DIR ="))
+    end = next(
+        i
+        for i in range(start, len(lines))
+        if lines[i].strip() == "pass" and lines[i].startswith("    ")
+    )
     return "\n".join(lines[start : end + 1])
 
 

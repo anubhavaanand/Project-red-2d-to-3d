@@ -9,7 +9,7 @@ SERVER_PY = Path(__file__).parent.parent / "src" / "api" / "server.py"
 
 def _resolver_source():
     lines = SERVER_PY.read_text().splitlines()
-    start = next(i for i, l in enumerate(lines) if l.startswith("def _resolve_output_dir"))
+    start = next(i for i, line in enumerate(lines) if line.startswith("def _resolve_output_dir"))
     end = next(i for i in range(start + 1, len(lines)) if lines[i].startswith("OUTPUT_DIR ="))
     return "\n".join(lines[start:end])
 
@@ -50,8 +50,7 @@ class TestOutputDirResolution:
                 for t in node.targets:
                     if getattr(t, "id", "") == "OUTPUT_DIR":
                         assert not (
-                            isinstance(node.value, ast.Constant)
-                            and node.value.value == "./outputs"
+                            isinstance(node.value, ast.Constant) and node.value.value == "./outputs"
                         ), "OUTPUT_DIR is still hardcoded"
 
     def test_health_exposes_output_dir(self):
