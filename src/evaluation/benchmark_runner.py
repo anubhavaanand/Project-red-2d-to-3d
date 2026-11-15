@@ -8,6 +8,7 @@ from __future__ import annotations
 import gc
 import json
 import time
+import traceback
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -1031,12 +1032,19 @@ class BenchmarkRunner:
                         f"t={latency:.2f}s  VRAM={vram_gb:.2f}GB"
                     )
                 except Exception as e:
-                    print(f"FAILED: {e}")
+                    # EVAL-24: str(e) alone makes a 400-row run hard to diagnose.
+                    # Keep the exception type and log the full traceback.
+                    err_type = type(e).__name__
+                    tb = traceback.format_exc()
+                    print(f"FAILED: {err_type}: {e}")
+                    print(tb)
                     self.results.append(
                         {
                             "engine": engine_name,
                             "sample_id": sample.sample_id,
                             "error": str(e),
+                            "error_type": err_type,
+                            "traceback": tb,
                         }
                     )
 
