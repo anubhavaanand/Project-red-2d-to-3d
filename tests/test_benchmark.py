@@ -4,6 +4,7 @@ Covers: metrics, engines (import/smoke), evaluation runner, export, data contrac
 """
 
 import io
+import importlib.util
 import json
 import os
 import tempfile
@@ -81,6 +82,13 @@ class TestFScore:
 
 
 class TestPSNR:
+    """Test PSNR computation (requires torch)."""
+
+    pytestmark = pytest.mark.skipif(
+        importlib.util.find_spec("torch") is None,
+        reason="torch not installed",
+    )
+
     """Test PSNR computation."""
 
     def test_identical_images(self):
@@ -104,6 +112,13 @@ class TestPSNR:
 # =============================================================================
 
 class TestEngineImports:
+    """Verify all engines can be imported (requires torch)."""
+
+    pytestmark = pytest.mark.skipif(
+        importlib.util.find_spec("torch") is None,
+        reason="torch not installed",
+    )
+
     """Verify all engines can be imported without CUDA."""
 
     @pytest.mark.gpu
@@ -143,6 +158,13 @@ class TestEngineImports:
 # =============================================================================
 
 class TestBenchmarkRunner:
+    """BenchmarkRunner construction (requires torch)."""
+
+    pytestmark = pytest.mark.skipif(
+        importlib.util.find_spec("torch") is None,
+        reason="torch not installed",
+    )
+
     """Test BenchmarkRunner with mock engines."""
 
     def test_runner_init(self):
@@ -173,6 +195,13 @@ class TestBenchmarkRunner:
 # =============================================================================
 
 class TestBenchmarkRegression:
+    """Regression tests (requires torch)."""
+
+    pytestmark = pytest.mark.skipif(
+        importlib.util.find_spec("torch") is None,
+        reason="torch not installed",
+    )
+
     """Regression tests to ensure benchmark produces consistent results."""
 
     def test_benchmark_runner_returns_dataframe(self):
@@ -425,16 +454,26 @@ class TestNotebookStructure:
             assert len(code_cells) > 0
 
     def test_notebook_code_cells_valid_python(self, batch1_notebook, batch2_notebook):
-        """All code cells should contain valid Python syntax."""
+        """All code cells should contain valid Python syntax.
+
+        IPython magics and shell escapes (``!pip install``, ``%matplotlib``) are
+        not valid Python, so each line is replaced by ``pass`` before parsing.
+        """
         import ast
         for nb in [batch1_notebook, batch2_notebook]:
             for i, cell in enumerate(nb["cells"]):
                 if cell["cell_type"] != "code":
                     continue
-                src = "".join(cell["source"])
-                # Skip cells with IPython magics/shell commands
-                if src.strip().startswith("!") or src.strip().startswith("%"):
-                    continue
+                lines = []
+                for raw in cell["source"]:
+                    stripped = raw.lstrip()
+                    if stripped.startswith(("!", "%")):
+                        # keep indentation so the block structure survives
+                        indent = raw[: len(raw) - len(stripped)]
+                        lines.append(f"{indent}pass\n")
+                    else:
+                        lines.append(raw)
+                src = "".join(lines)
                 try:
                     ast.parse(src)
                 except SyntaxError as e:

@@ -3,9 +3,18 @@ from scipy.spatial import cKDTree
 
 
 def compute_chamfer_distance(pc1: np.ndarray, pc2: np.ndarray, squared: bool = False) -> float:
-    """Computes symmetric mean L2 Chamfer Distance between two point clouds."""
+    """Computes symmetric mean L2 Chamfer Distance between two point clouds.
+
+    Raises ``ValueError`` if either cloud is empty: the distance is undefined,
+    and returning ``nan`` would silently poison every aggregate downstream.
+    """
     p1 = np.asarray(pc1, dtype=np.float32)
     p2 = np.asarray(pc2, dtype=np.float32)
+    if len(p1) == 0 or len(p2) == 0:
+        raise ValueError(
+            f"Chamfer Distance is undefined for an empty cloud "
+            f"(len(pc1)={len(p1)}, len(pc2)={len(p2)})"
+        )
     tree1 = cKDTree(p1)
     tree2 = cKDTree(p2)
     d1, _ = tree1.query(p2, k=1, workers=-1)
