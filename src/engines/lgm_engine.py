@@ -45,6 +45,23 @@ class LgmViewError(RuntimeError):
     """ENG-14: raised when ImageDream returns an unexpected view payload."""
 
 
+def reorder_mv_views(mv_image) -> np.ndarray:
+    """Reorder ImageDream's views into LGM's input layout.
+
+    ENG-14: ImageDream returns four views as (front, right, back, left); LGM
+    expects (front, left, back, right), i.e. indices 1 and 0 swap. The old code
+    indexed ``[1..3]`` and ``[0]`` blind, which raised IndexError or silently
+    assigned wrong views if the pipeline ever returned a different length.
+    """
+    if not isinstance(mv_image, (list, tuple)) or len(mv_image) < 4:
+        raise LgmViewError(
+            f"ImageDream returned {type(mv_image).__name__} with "
+            f"{len(mv_image) if hasattr(mv_image, '__len__') else 'n/a'} entries; "
+            "expected 4 views (front, right, back, left)"
+        )
+    return np.stack([np.asarray(mv_image[i]) for i in (1, 2, 3, 0)], axis=0)
+
+
 # ENG-17: opacity thresholds used to build the foreground set, tried in order
 # until enough points survive. These are the values the published numbers were
 # produced with; they are configurable per engine instance.
@@ -218,18 +235,8 @@ class LGMEngine(AbstractEngine):
         )
         # ENG-14: ImageDream returns four views in (front, right, back, left)
         # order; LGM's input layout is (front, left, back, right), so index
-        # 0 and 1 swap. The previous code indexed [1..3] and [0] blind, which
-        # raised IndexError or silently assigned wrong views if the pipeline
-        # ever returns a different length.
-        if not isinstance(mv_image, (list, tuple)) or len(mv_image) < 4:
-            raise LgmViewError(
-                f"ImageDream returned {type(mv_image).__name__} with "
-                f"{len(mv_image) if hasattr(mv_image, '__len__') else 'n/a'} entries; "
-                "expected 4 views (front, right, back, left)"
-            )
-        mv_image = np.stack(
-            [np.asarray(mv_image[i]) for i in (1, 2, 3, 0)], axis=0
-        )
+        # 0 and 1 swap. reorder_mv_views validates the payload first.
+        mv_image = reorder_mv_views(mv_image)
         t_mv = time.perf_counter()
 
         input_image = torch.from_numpy(mv_image).permute(0, 3, 1, 2).float().to(self.device)
