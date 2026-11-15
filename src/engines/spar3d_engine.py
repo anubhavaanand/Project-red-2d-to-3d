@@ -20,6 +20,37 @@ from ._paths import extend_sys_path
 from ._memory import free_cuda_cache
 
 
+class Spar3dOutputError(RuntimeError):
+    """ENG-36: raised when SPAR3D returns a payload we cannot read a mesh from."""
+
+
+def _extract_mesh_object(mesh_out):
+    """Return the mesh object from SPAR3D's run_image() output.
+
+    ENG-36: the previous code did
+    ``mesh_out[0] if isinstance(mesh_out, (list, tuple)) else mesh_out``, which
+    silently accepted a dict or scene (indexing a dict by 0 raises KeyError, and
+    a scene is not a mesh). Validate instead.
+    """
+    if isinstance(mesh_out, (list, tuple)):
+        if not mesh_out:
+            raise Spar3dOutputError("SPAR3D returned an empty sequence")
+        return mesh_out[0]
+
+    if isinstance(mesh_out, dict):
+        raise Spar3dOutputError(
+            f"SPAR3D returned a dict (keys: {sorted(mesh_out)}); expected a mesh"
+        )
+
+    if not hasattr(mesh_out, "vertices") or not hasattr(mesh_out, "faces"):
+        raise Spar3dOutputError(
+            f"SPAR3D returned {type(mesh_out).__name__}, which has no "
+            "vertices/faces"
+        )
+
+    return mesh_out
+
+
 class Spar3dEngine(AbstractEngine):
     def __init__(
         self,
@@ -200,7 +231,7 @@ class Spar3dEngine(AbstractEngine):
         )
         latency = time.perf_counter() - t0
 
-        tm = mesh_out[0] if isinstance(mesh_out, (list, tuple)) else mesh_out
+        tm = _extract_mesh_object(mesh_out)
         # Undo spar3d/system.py:917's `tmesh.invert()` so triangle winding & normals face OUTWARD!
         try:
             tm.invert()
