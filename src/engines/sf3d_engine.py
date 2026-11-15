@@ -87,9 +87,21 @@ class SF3DEngine(AbstractEngine):
         latency = time.perf_counter() - t0
 
         tm = mesh_out[0]  # trimesh.Trimesh with UV texture
+        
+        # Extract UV coordinates and texture map from trimesh visual
+        uv_coords = None
+        texture_map = None
+        if hasattr(tm.visual, 'uv') and tm.visual.uv is not None:
+            uv_coords = np.asarray(tm.visual.uv, dtype=np.float32)
+        if hasattr(tm.visual, 'material') and tm.visual.material is not None:
+            if hasattr(tm.visual.material, 'image') and tm.visual.material.image is not None:
+                texture_map = tm.visual.material.image
+        
         mesh = Mesh3D(
             vertices=np.asarray(tm.vertices, dtype=np.float32),
             faces=np.asarray(tm.faces, dtype=np.int32),
+            uv_coords=uv_coords,
+            texture_map=texture_map,
         )
         metadata: Dict[str, Any] = {
             "engine": "SF3D",
