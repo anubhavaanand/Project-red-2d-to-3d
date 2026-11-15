@@ -8,6 +8,7 @@ from __future__ import annotations
 import gc
 import json
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -64,6 +65,26 @@ def _srgb_encode_u8(rgb: np.ndarray) -> np.ndarray:
     x = np.clip(np.asarray(rgb, dtype=np.float32) / 255.0, 0.0, 1.0)
     y = np.where(x <= 0.0031308, x * 12.92, 1.055 * np.power(x, 1.0 / 2.4) - 0.055)
     return np.clip(y * 255.0 + 0.5, 0, 255).astype(np.uint8)
+
+
+@contextmanager
+def _offscreen_renderer(width: int, height: int):
+    """Yield a pyrender OffscreenRenderer and always release the GL context.
+
+    EVAL-15: a new renderer was created per render and ``delete()`` was not in a
+    ``finally``, so an exception inside ``render()`` leaked the EGL/GL context and
+    long runs exhausted them. Always delete on exit.
+    """
+    import pyrender
+
+    renderer = pyrender.OffscreenRenderer(width, height)
+    try:
+        yield renderer
+    finally:
+        try:
+            renderer.delete()
+        except Exception as e:
+            print(f"[render] renderer.delete() failed: {type(e).__name__}: {e}")
 
 
 def _ensure_pyopengl_compat() -> None:
@@ -618,9 +639,8 @@ def render_novel_view_same_bg(
         camera = pyrender.PerspectiveCamera(yfov=np.radians(49.1))
         scene.add(camera, pose=camera_pose)
 
-        r = pyrender.OffscreenRenderer(resolution * 2, resolution * 2)
-        color, depth = r.render(scene, flags=pyrender.RenderFlags.SKIP_CULL_FACES)
-        r.delete()
+        with _offscreen_renderer(resolution * 2, resolution * 2) as r:
+            color, depth = r.render(scene, flags=pyrender.RenderFlags.SKIP_CULL_FACES)
         if white_bg:
             color = color.copy()
             color[depth == 0] = 255
@@ -712,9 +732,8 @@ def render_gso_mesh_view(
         camera_pose = _add_three_point_lights(scene, azimuth_deg, elevation_deg, distance)
         scene.add(pyrender.PerspectiveCamera(yfov=np.radians(49.1)), pose=camera_pose)
 
-        r = pyrender.OffscreenRenderer(resolution * 2, resolution * 2)
-        color, depth = r.render(scene, flags=pyrender.RenderFlags.SKIP_CULL_FACES)
-        r.delete()
+        with _offscreen_renderer(resolution * 2, resolution * 2) as r:
+            color, depth = r.render(scene, flags=pyrender.RenderFlags.SKIP_CULL_FACES)
         color = color.copy()
         color[depth == 0] = 255
         # Native-UV path renders in linear light; encode once to display space.
