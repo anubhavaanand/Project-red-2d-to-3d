@@ -31,6 +31,24 @@ from ._memory import free_cuda_cache
 from ._outputs import extract_mesh_object
 
 
+def _summarize_glob_dict(glob_dict) -> dict:
+    """Reduce run_image's second return value to JSON-safe provenance.
+
+    ENG-40: the value was unpacked and never used. It may contain tensors or
+    other non-serialisable objects, so keep only scalars and short strings.
+    """
+    if not isinstance(glob_dict, dict):
+        return {}
+
+    summary: dict = {}
+    for key, value in glob_dict.items():
+        if isinstance(value, (int, float, str, bool)) or value is None:
+            summary[str(key)] = value
+        elif isinstance(value, (list, tuple)) and len(value) <= 8:
+            summary[str(key)] = [v for v in value if isinstance(v, (int, float, str, bool))]
+    return summary
+
+
 class SF3DEngine(AbstractEngine):
     """Thin wrapper around the official SF3D pipeline."""
 
@@ -131,6 +149,9 @@ class SF3DEngine(AbstractEngine):
             "face_count": len(mesh.faces),
             "texture_resolution": self.texture_resolution,
             "note": "DMTet extraction + UV unwrap (vs TripoSR Marching Cubes)",
+            # ENG-40: run_image's second return value was assigned and dropped.
+            # Keep the scalar entries that are cheap and useful for provenance.
+            "glob_dict": _summarize_glob_dict(glob_dict),
         }
         free_cuda_cache()
         return ReconstructionResult(mesh=mesh, metadata=metadata)
