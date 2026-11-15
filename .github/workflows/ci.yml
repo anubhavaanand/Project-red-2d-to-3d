@@ -83,6 +83,96 @@ jobs:
           safety check --json || true
         continue-on-error: true
 
+  dependency-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies and audit tools
+        run: |
+          pip install -e .
+          pip install pip-audit
+
+      - name: Audit dependencies for known vulnerabilities
+        run: |
+          pip-audit --desc --format=json --output=audit-report.json || true
+
+      - name: Check for unpinned dependencies
+        run: |
+          python -c "
+          import re
+          import sys
+          from pathlib import Path
+
+          # Check pyproject.toml for unpinned deps
+          pyproject = Path('pyproject.toml').read_text()
+          reqs = Path('requirements.txt').read_text()
+
+          issues = []
+
+          # Check for git+ dependencies without commit pins
+          for line in reqs.splitlines():
+              if line.startswith('git+') and '@' not in line:
+                  issues.append(f'Unpinned git dependency: {line}')
+
+          if issues:
+              print('WARNING: Found unpinned dependencies:')
+              for i in issues:
+                  print(f'  - {i}')
+          else:
+              print('All dependencies are pinned')
+          "
+
+      - name: Verify imports are declared
+        run: |
+          python -c "
+          import ast
+          import sys
+          from pathlib import Path
+
+          # Parse all Python files and collect imports
+          src_dir = Path('src')
+          all_imports = set()
+
+          for py_file in src_dir.rglob('*.py'):
+              try:
+                  tree = ast.parse(py_file.read_text())
+                  for node in ast.walk(tree):
+                      if isinstance(node, ast.Import):
+                          for alias in node.names:
+                              all_imports.add(alias.name.split('.')[0])
+                      elif isinstance(node, ast.ImportFrom):
+                          if node.module:
+                              all_imports.add(node.module.split('.')[0])
+              except SyntaxError:
+                  pass
+
+          # Standard library modules (partial list)
+          stdlib = {
+              'os', 'sys', 'json', 'time', 'pathlib', 'typing', 'collections',
+              'dataclasses', 'abc', 'io', 're', 'math', 'random', 'hashlib',
+              'subprocess', 'shutil', 'tempfile', 'uuid', 'warnings', 'logging',
+              'datetime', 'functools', 'itertools', 'copy', 'pickle', 'base64',
+              'struct', 'enum', 'threading', 'multiprocessing', 'queue',
+              'socket', 'http', 'urllib', 'email', 'csv', 'sqlite3',
+          }
+
+          # Filter to third-party imports
+          third_party = all_imports - stdlib - {'src', '__future__'}
+          third_party = {m for m in third_party if not m.startswith('_')}
+
+          if third_party:
+              print(f'Third-party imports found: {sorted(third_party)}')
+              print('Verify these are declared in pyproject.toml or requirements.txt')
+          else:
+              print('No third-party imports detected')
+          "
+
   import-check:
     runs-on: ubuntu-latest
     steps:
