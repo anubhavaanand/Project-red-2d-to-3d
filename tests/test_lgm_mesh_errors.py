@@ -102,13 +102,14 @@ class TestOuterExceptChains:
         def _boom(*a, **k):
             raise ValueError("synthetic failure")
 
-        monkeypatch.setattr(engine, "_select_foreground", _boom, raising=False)
         # _select_foreground is a module function, so patch it there
         monkeypatch.setattr(lgm, "_select_foreground", _boom)
 
         with pytest.raises(lgm.LgmMeshExtractionError) as exc:
             engine._gaussians_to_mesh(cloud, resolution=16)
-        assert isinstance(exc.value.__cause__, ValueError)
+        # the original exception must be preserved as __cause__
+        assert exc.value.__cause__ is not None
+        assert "synthetic failure" in str(exc.value.__cause__)
 
 
 class TestSelectForegroundHelper:
