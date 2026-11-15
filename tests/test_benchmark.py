@@ -3,15 +3,14 @@ Test suite for the image-to-3d-benchmark project.
 Covers: metrics, engines (import/smoke), evaluation runner, export, data contracts.
 """
 
+import io
 import json
 import os
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
-
 
 # =============================================================================
 # METRICS TESTS (EVAL-31)
@@ -170,7 +169,7 @@ class TestBenchmarkRunner:
 
 
 # =============================================================================
-# BENCHMARK REGRESSION TESTS (CI-04) hehe   
+# BENCHMARK REGRESSION TESTS (CI-04) hehe
 # =============================================================================
 
 class TestBenchmarkRegression:
@@ -179,6 +178,7 @@ class TestBenchmarkRegression:
     def test_benchmark_runner_returns_dataframe(self):
         """BenchmarkRunner.get_summary_df should return a DataFrame."""
         import pandas as pd
+
         from src.evaluation.benchmark_runner import BenchmarkRunner
         runner = BenchmarkRunner(
             dataset_path="/tmp/fake",
@@ -218,6 +218,7 @@ class TestBenchmarkRegression:
         """save_results should write a JSON file."""
         import json
         import tempfile
+
         from src.evaluation.benchmark_runner import BenchmarkRunner
         runner = BenchmarkRunner(
             dataset_path="/tmp/fake",
@@ -344,6 +345,7 @@ class TestAPISmoke:
         """Create a test client for the API."""
         try:
             from fastapi.testclient import TestClient
+
             from src.api.server import app
             return TestClient(app)
         except ImportError:
@@ -459,6 +461,93 @@ class TestNotebookStructure:
         )
         assert "TRELLIS" in all_source or "trellis" in all_source
         assert "SPAR3D" in all_source or "spar3d" in all_source
+
+# =============================================================================
+# MODEL WEIGHT PROVENANCE (SEC-12)
+# =============================================================================
+
+class TestModelWeightProvenance:
+    """Pinned SHA-256 verification for implicitly downloaded weights."""
+
+    def _asset(self, tmp_path, name="model.bin", content=b"hello"):
+        from src.model_weights import Asset
+        path = tmp_path / name
+        path.write_bytes(content)
+        import hashlib
+        return Asset(path=path, url="https://example.invalid/" + name,
+                     sha256=hashlib.sha256(content).hexdigest())
+
+    def test_matching_hash_returns_path(self, tmp_path):
+        from src.model_weights import ensure
+        a = self._asset(tmp_path)
+        assert ensure(a) == a.path
+
+    def test_corrupt_cache_raises(self, tmp_path):
+        from src.model_weights import ChecksumMismatchError, ensure
+        a = self._asset(tmp_path, content=b"good")
+        a.path.write_bytes(b"tampered")
+        with pytest.raises(ChecksumMismatchError):
+            ensure(a)
+
+    def test_download_verifies_and_replaces(self, tmp_path):
+        import hashlib
+
+        from src.model_weights import Asset, ensure
+        dest = tmp_path / "sub" / "w.bin"
+        a = Asset(path=dest, url="https://example.invalid/w.bin",
+                  sha256=hashlib.sha256(b"payload").hexdigest())
+
+        class _Resp:
+            def __init__(self, data): self._b = io.BytesIO(data)
+            def read(self, n=-1): return self._b.read(n)
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+
+        import src.model_weights as mw
+        orig = mw.urllib.request.urlopen
+        try:
+            mw.urllib.request.urlopen = lambda url: _Resp(b"payload")
+            assert ensure(a) == dest
+        finally:
+            mw.urllib.request.urlopen = orig
+        assert dest.read_bytes() == b"payload"
+        assert not dest.with_name(dest.name + ".part").exists()
+
+    def test_download_mismatch_leaves_nothing(self, tmp_path):
+        import hashlib
+
+        from src.model_weights import Asset, ChecksumMismatchError, ensure
+        dest = tmp_path / "w.bin"
+        a = Asset(path=dest, url="https://example.invalid/w.bin",
+                  sha256=hashlib.sha256(b"expected").hexdigest())
+
+        class _Resp:
+            def __init__(self, data): self._b = io.BytesIO(data)
+            def read(self, n=-1): return self._b.read(n)
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+
+        import src.model_weights as mw
+        orig = mw.urllib.request.urlopen
+        try:
+            mw.urllib.request.urlopen = lambda url: _Resp(b"evil")
+            with pytest.raises(ChecksumMismatchError):
+                ensure(a)
+        finally:
+            mw.urllib.request.urlopen = orig
+        assert not dest.exists()
+        assert not dest.with_name(dest.name + ".part").exists()
+
+    def test_pins_exist_for_required_assets(self):
+        from src.model_weights import asset
+        for name in ("isnet-general-use.onnx", "vgg16-397923af.pth"):
+            assert len(asset(name).sha256) == 64
+
+    def test_unknown_asset_rejected(self):
+        from src.model_weights import asset
+        with pytest.raises(KeyError):
+            asset("no-such-weights.bin")
+
 
 # =============================================================================
 # RUN AS MAIN
