@@ -3,6 +3,7 @@ torch==2.2.0
 torchvision==0.17.0
 numpy==1.26.4
 Pillow==10.2.0
+scikit-image==0.22.0
 
 # 3D / mesh
 trimesh==4.4.1
@@ -44,7 +45,6 @@ safetensors==0.4.2
 einops==0.7.0
 roma==1.4.0
 plyfile==1.0.3
-scikit-image==0.22.0
 scikit-learn==1.4.1
 diff-gaussian-rasterization @ git+https://github.com/ashawkey/diff-gaussian-rasterization.git
 
