@@ -24,6 +24,11 @@ Run locally:
     pip install gradio
     python app.py
 
+Security:
+    - Default: binds to 127.0.0.1 only (local access)
+    - Set GRADIO_USERNAME + GRADIO_PASSWORD for auth
+    - Set GRADIO_SERVER_NAME=0.0.0.0 for PaaS (requires auth)
+
 Deploy to HuggingFace Spaces:
     1. Create a new Space (Gradio SDK, GPU T4 or A100)
     2. Push this file + requirements.txt to the Space repo
@@ -305,26 +310,30 @@ if __name__ == "__main__":
     Path("examples").mkdir(exist_ok=True)
 
     app = build_ui()
-    
+
     # Security: require authentication for public deployments
     # Set GRADIO_USERNAME and GRADIO_PASSWORD env vars to enable auth
-    # If not set, app runs in local-only mode (no public share)
+    # Set GRADIO_SERVER_NAME=0.0.0.0 for PaaS deployments (requires auth)
     auth_username = os.environ.get("GRADIO_USERNAME")
     auth_password = os.environ.get("GRADIO_PASSWORD")
-    
+
+    # Fail closed: both credentials must be set together
+    if bool(auth_username) != bool(auth_password):
+        sys.exit("[SECURITY] Both GRADIO_USERNAME and GRADIO_PASSWORD must be set (got only one). Refusing to start.")
+
     auth = None
     if auth_username and auth_password:
         auth = (auth_username, auth_password)
         print(f"[SECURITY] Authentication enabled for user: {auth_username}")
     else:
-        print("[SECURITY] No credentials set — running in local-only mode (share=False)")
-    
+        print("[SECURITY] No credentials set — running in local-only mode (127.0.0.1)")
+
     app.launch(
-        server_name="0.0.0.0",
+        server_name=os.environ.get("GRADIO_SERVER_NAME", "127.0.0.1"),
         server_port=int(os.environ.get("PORT", 7860)),
         share=False,         # SECURITY FIX: never auto-create public tunnel
         auth=auth,           # SECURITY FIX: require auth if credentials provided
-        show_error=not auth, # only show errors in local mode
+        show_error=False,    # SECURITY FIX: never expose tracebacks to users
     )
 
 
