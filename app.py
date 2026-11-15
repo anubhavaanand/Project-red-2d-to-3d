@@ -45,6 +45,7 @@ import sys
 import time
 import tempfile
 import traceback
+import uuid
 from pathlib import Path
 
 import gradio as gr
@@ -173,7 +174,9 @@ def generate_3d(
         latency = time.time() - t0
 
         # 3. Export
-        out_file = OUTPUT_DIR / f"output_{int(time.time()*1000)}"
+        # APP-03: a millisecond timestamp collides when two requests land in
+        # the same millisecond (or on a coarse clock); uuid4 is unique.
+        out_file = OUTPUT_DIR / f"output_{uuid.uuid4().hex}"
 
         if result.mesh is not None:
             glb_path = str(out_file.with_suffix(".glb"))
