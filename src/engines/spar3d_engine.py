@@ -252,12 +252,16 @@ class Spar3dEngine(AbstractEngine):
                 arr[..., 3] = non_white.astype(np.uint8) * 255
                 rgba = Image.fromarray(arr, mode="RGBA")
 
+        # ENG-32: a failed crop was printed and ignored, so an uncropped image
+        # silently degraded results with no structured signal. Record it.
+        crop_error = None
         try:
             rgba = self._foreground_crop(
                 rgba, crop_ratio=self.foreground_ratio, newsize=(512, 512)
             )
         except Exception as crop_err:
-            print(f"[SPAR3D] foreground_crop fallback ({crop_err})")
+            crop_error = f"{type(crop_err).__name__}: {crop_err}"
+            print(f"[SPAR3D] foreground_crop failed, using uncropped input ({crop_error})")
 
         torch.manual_seed(42)
         np.random.seed(42)
@@ -323,6 +327,7 @@ class Spar3dEngine(AbstractEngine):
                 "face_count": len(mesh.faces),
                 "has_vertex_colors": vcols is not None,
                 "normal_fix": normal_fix,
+                "crop_error": crop_error,
             },
         )
 
