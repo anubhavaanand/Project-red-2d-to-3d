@@ -47,14 +47,21 @@ def _install_lgm_xformers_shim() -> None:
     import torch.nn.functional as _F
 
     def _memory_efficient_attention(q, k, v, attn_bias=None, op=None, **_kw):
+        # SECURITY: xformers attn_bias is not a dense mask. If provided, we cannot
+        # safely convert it to PyTorch's attn_mask format. Reject explicitly.
+        if attn_bias is not None:
+            raise NotImplementedError(
+                "xformers attention bias is not supported in the PyTorch SDPA shim. "
+                "Use dense boolean masks instead."
+            )
         if q.ndim == 3:
             out = _F.scaled_dot_product_attention(
-                q.unsqueeze(1), k.unsqueeze(1), v.unsqueeze(1), attn_mask=attn_bias
+                q.unsqueeze(1), k.unsqueeze(1), v.unsqueeze(1)
             )
             return out.squeeze(1)
         # xformers 4D tensors are (B, N, H, D); PyTorch SDPA expects (B, H, N, D)
         out = _F.scaled_dot_product_attention(
-            q.transpose(1, 2), k.transpose(1, 2), v.transpose(1, 2), attn_mask=attn_bias
+            q.transpose(1, 2), k.transpose(1, 2), v.transpose(1, 2)
         )
         return out.transpose(1, 2).contiguous()
 
