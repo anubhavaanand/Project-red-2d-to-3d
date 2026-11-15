@@ -4,6 +4,7 @@ TripoSR Engine — audited wrapper for VAST-AI-Research/TripoSR (stabilityai/Tri
 
 from __future__ import annotations
 
+import os
 import re
 import time
 from pathlib import Path
@@ -12,10 +13,15 @@ from typing import Any
 import numpy as np
 from PIL import Image
 
-from ._mask import alpha_is_usable, derive_foreground_mask
+from ._mask import FILTER_SPECKLE, alpha_is_usable, derive_foreground_mask
 from ._memory import free_cuda_cache
 from ._paths import extend_sys_path
 from .base import AbstractEngine, Mesh3D, ReconstructionResult
+
+# ENG-06 / benchmark freeze: the published v1.0 numbers used the signed volume
+# about the world origin. Opt in with IMAGE_TO_3D_CHECK_WINDING=1 to verify
+# watertightness/winding and measure about the centroid instead.
+CHECK_WINDING = os.environ.get("IMAGE_TO_3D_CHECK_WINDING", "0") == "1"
 
 
 def _skimage_mc_func(level, iso=0.0):
@@ -115,21 +121,32 @@ def _signed_volume_about(vertices: np.ndarray, faces: np.ndarray, origin: np.nda
     return float(np.sum(v0 * np.cross(v1, v2)) / 6.0)
 
 
-def _orient_outward(mesh_obj) -> str:
+def _orient_outward(mesh_obj, check_winding: bool = False) -> str:
     """Flip a mesh to outward-facing normals when that is safe to determine.
 
-    ENG-06: the old check took the signed volume about the world origin, which
-    is only translation-invariant for a closed, consistently wound surface. On
-    an open or non-manifold marching-cubes mesh the sign can be wrong and a
-    correct mesh gets flipped. Returns a short note so the decision is
-    observable rather than hidden in a bare except.
-    """
-    import trimesh
+    ENG-06 / benchmark freeze: the published v1.0 numbers came from the signed
+    volume about the **world origin**. That is only translation-invariant for a
+    closed, consistently wound surface; on an open or non-manifold
+    marching-cubes mesh the sign can be wrong and a correct mesh gets flipped.
 
+    ``check_winding`` (default ``False``) keeps the legacy origin-based test.
+    Pass ``True`` to verify watertightness and winding first and measure about
+    the centroid instead. Returns a short note so the decision is observable
+    rather than hidden in a bare except.
+    """
     vertices = np.asarray(mesh_obj.vertices, dtype=np.float64)
     faces = np.asarray(mesh_obj.faces, dtype=np.int64)
     if len(faces) == 0:
         return "no faces"
+
+    if not check_winding:
+        # Legacy v1.0 path — bit-identical to what produced the paper's numbers.
+        if _signed_volume_about(vertices, faces, np.zeros(3)) < 0.0:
+            mesh_obj.invert()
+            return "inverted (negative volume about origin)"
+        return "already outward"
+
+    import trimesh
 
     tm = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
 
@@ -269,7 +286,7 @@ class TriposrEngine(AbstractEngine):
         # ENG-05: use the shared thresholded + speckle-filtered mask instead of
         # treating every pixel below 248 as foreground (JPEG noise became mask).
         if not alpha_is_usable(arr):
-            fg = derive_foreground_mask(arr)
+            fg = derive_foreground_mask(arr, filter_speckle=FILTER_SPECKLE)
             if fg.any():
                 arr[..., 3] = fg.astype(np.uint8) * 255
                 rgba = Image.fromarray(arr, mode="RGBA")
@@ -293,7 +310,7 @@ class TriposrEngine(AbstractEngine):
         # and a correct mesh gets flipped. Measure about the centroid, and only
         # trust the sign when the surface is closed and consistently wound.
         try:
-            _orient_outward(mesh_obj)
+            _orient_outward(mesh_obj, check_winding=CHECK_WINDING)
         except Exception as e:
             print(f"[TripoSR] Orientation check skipped: {type(e).__name__}: {e}")
 

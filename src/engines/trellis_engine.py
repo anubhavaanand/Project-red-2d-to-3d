@@ -23,7 +23,7 @@ import numpy as np
 import torch
 from PIL import Image
 
-from ._mask import alpha_is_usable, derive_foreground_mask
+from ._mask import FILTER_SPECKLE, alpha_is_usable, derive_foreground_mask
 from ._memory import free_cuda_cache
 from ._paths import extend_sys_path
 from .base import AbstractEngine, GaussianCloud, Mesh3D, ReconstructionResult
@@ -177,7 +177,7 @@ class TrellisEngine(AbstractEngine):
         # ENG-05: use the shared thresholded + speckle-filtered mask instead of
         # treating every pixel below 248 as foreground (JPEG noise became mask).
         if not alpha_is_usable(arr):
-            fg = derive_foreground_mask(arr)
+            fg = derive_foreground_mask(arr, filter_speckle=FILTER_SPECKLE)
             if fg.any():
                 arr[..., 3] = fg.astype(np.uint8) * 255
                 rgba = Image.fromarray(arr, mode="RGBA")

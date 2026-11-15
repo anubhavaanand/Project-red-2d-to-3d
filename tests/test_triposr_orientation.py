@@ -90,7 +90,7 @@ class TestOrientOutward:
     def test_outward_sphere_left_alone(self, sphere):
         v, f = sphere
         _, orient = _helpers()
-        assert orient(_Mesh(v, f)) == "already outward"
+        assert orient(_Mesh(v, f), check_winding=True) == "already outward"
 
     def test_inward_sphere_is_flipped(self, sphere):
         v, f = sphere
@@ -104,7 +104,7 @@ class TestOrientOutward:
         v, f = sphere
         _, orient = _helpers()
         m = _Mesh(v, f[: len(f) // 2])
-        note = orient(m)
+        note = orient(m, check_winding=True)
         assert "not watertight" in note
         assert not m.inverted
 
@@ -114,7 +114,7 @@ class TestOrientOutward:
         f_mixed = f.copy()
         f_mixed[0] = f_mixed[0][::-1]
         m = _Mesh(v, f_mixed)
-        assert "not watertight" in orient(m)
+        assert "not watertight" in orient(m, check_winding=True)
 
     def test_empty_mesh_is_handled(self):
         _, orient = _helpers()
@@ -128,14 +128,17 @@ class TestSourceContract:
 
     def test_uses_the_helper(self):
         src = ENGINE.read_text()
-        assert "_orient_outward(mesh_obj)" in src
+        assert "_orient_outward(mesh_obj, check_winding=CHECK_WINDING)" in src
 
     def test_bare_except_pass_is_gone(self):
         src = ENGINE.read_text()
         orient_call = src[
-            src.index("_orient_outward(mesh_obj)") : src.index("vertex_colors = None")
+            src.index("_orient_outward(mesh_obj, check_winding=CHECK_WINDING)") : src.index(
+                "vertex_colors = None"
+            )
         ]
         assert "except Exception:\n            pass" not in orient_call
+        assert "Orientation check skipped" in orient_call
 
     def test_engine_parses(self):
         ast.parse(ENGINE.read_text())
