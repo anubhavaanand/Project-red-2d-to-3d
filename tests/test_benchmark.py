@@ -107,26 +107,31 @@ class TestPSNR:
 class TestEngineImports:
     """Verify all engines can be imported without CUDA."""
 
+    @pytest.mark.gpu
     def test_triposr_import(self):
         from src.engines.triposr_engine import TriposrEngine
         engine = TriposrEngine(device="cpu")
         assert engine.device == "cpu"
 
+    @pytest.mark.gpu
     def test_lgm_import(self):
         from src.engines.lgm_engine import LGMEngine
         engine = LGMEngine(device="cpu")
         assert engine.device == "cpu"
 
+    @pytest.mark.gpu
     def test_trellis_import(self):
         from src.engines.trellis_engine import TrellisEngine
         engine = TrellisEngine(device="cpu")
         assert engine.device == "cpu"
 
+    @pytest.mark.gpu
     def test_spar3d_import(self):
         from src.engines.spar3d_engine import Spar3dEngine
         engine = Spar3dEngine(device="cpu")
         assert engine.device == "cpu"
 
+    @pytest.mark.gpu
     def test_lazy_init(self):
         """Engines should not load models on __init__."""
         from src.engines.triposr_engine import TriposrEngine
@@ -259,6 +264,125 @@ class TestConfig:
     def test_pyproject_exists(self):
         pyproject = Path(__file__).parent.parent / "pyproject.toml"
         assert pyproject.exists()
+
+
+# =============================================================================
+# API SMOKE TESTS (CI-07)
+# =============================================================================
+
+class TestAPISmoke:
+    """Smoke tests for the FastAPI server endpoints."""
+
+    @pytest.fixture
+    def client(self):
+        """Create a test client for the API."""
+        try:
+            from fastapi.testclient import TestClient
+            from src.api.server import app
+            return TestClient(app)
+        except ImportError:
+            pytest.skip("fastapi/testclient not installed")
+
+    def test_health_check(self, client):
+        """Health endpoint should return 200 and healthy status."""
+        response = client.get("/health")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "healthy"
+
+    def test_list_engines(self, client):
+        """Engines endpoint should return list of 3 engines."""
+        response = client.get("/engines")
+        assert response.status_code == 200
+        engines = response.json()
+        assert len(engines) == 3
+        engine_ids = [e["id"] for e in engines]
+        assert "triposr" in engine_ids
+        assert "lgm" in engine_ids
+        assert "trellis" in engine_ids
+
+    def test_predict_missing_file(self, client):
+        """Predict endpoint should return 400/422 without file."""
+        response = client.post("/predict", data={"engine_type": "triposr"})
+        assert response.status_code in (400, 422)
+
+    def test_predict_invalid_engine(self, client):
+        """Predict endpoint should return 400 for invalid engine."""
+        import io
+        fake_image = io.BytesIO(b"fake image data")
+        response = client.post(
+            "/predict",
+            files={"file": ("test.png", fake_image, "image/png")},
+            data={"engine_type": "invalid_engine"},
+        )
+        assert response.status_code in (400, 422)
+
+
+# =============================================================================
+# BENCHMARK REGRESSION TESTS (CI-04)
+# =============================================================================
+
+class TestBenchmarkRegression:
+    """Regression tests to ensure benchmark produces consistent results."""
+
+    def test_benchmark_runner_returns_dataframe(self):
+        """BenchmarkRunner.get_summary_df should return a DataFrame."""
+        import pandas as pd
+        from src.evaluation.benchmark_runner import BenchmarkRunner
+        runner = BenchmarkRunner(
+            dataset_path="/tmp/fake",
+            engines=[],
+            num_samples=10,
+            output_dir="/tmp/test_outputs",
+        )
+        df = runner.get_summary_df()
+        assert isinstance(df, pd.DataFrame)
+
+    def test_benchmark_runner_empty_results(self):
+        """Runner with no results should return empty DataFrame."""
+        from src.evaluation.benchmark_runner import BenchmarkRunner
+        runner = BenchmarkRunner(
+            dataset_path="/tmp/fake",
+            engines=[],
+            num_samples=10,
+            output_dir="/tmp/test_outputs",
+        )
+        df = runner.get_summary_df()
+        assert df.empty
+
+    def test_benchmark_runner_export_latex(self):
+        """export_latex_table should return a string with table markup."""
+        from src.evaluation.benchmark_runner import BenchmarkRunner
+        runner = BenchmarkRunner(
+            dataset_path="/tmp/fake",
+            engines=[],
+            num_samples=10,
+            output_dir="/tmp/test_outputs",
+        )
+        latex = runner.export_latex_table()
+        assert isinstance(latex, str)
+        assert "tabular" in latex
+
+    def test_benchmark_runner_save_results(self):
+        """save_results should write a JSON file."""
+        import json
+        import tempfile
+        from src.evaluation.benchmark_runner import BenchmarkRunner
+        runner = BenchmarkRunner(
+            dataset_path="/tmp/fake",
+            engines=[],
+            num_samples=10,
+            output_dir="/tmp/test_outputs",
+        )
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
+            path = f.name
+        try:
+            runner.save_results(path)
+            with open(path) as f:
+                data = json.load(f)
+            assert isinstance(data, list)
+        finally:
+            os.unlink(path)
 
 
 # =============================================================================
