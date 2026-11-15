@@ -221,6 +221,10 @@ class TrellisEngine(AbstractEngine):
             gc.collect()
 
             out_gs_color = None
+            # ENG-21: models that must stay on CPU after this block. Moving a
+            # decoder back to the GPU right after it OOM'd would immediately
+            # OOM again, and the original error would be masked.
+            keep_on_cpu: set = set()
             try:
                 out_mesh = p.models["slat_decoder_mesh"](slat)
                 outputs = {"mesh": out_mesh}
@@ -237,19 +241,32 @@ class TrellisEngine(AbstractEngine):
                         p.models["slat_decoder_gs"].to("cpu")
                         p.models["slat_decoder_mesh"].to(self.dev)
                         free_cuda_cache()
-            except torch.OutOfMemoryError:
+            except torch.OutOfMemoryError as mesh_oom:
                 print("[TRELLIS] mesh decode OOM -> gaussian fallback")
+                # the mesh decoder is the thing that just failed: keep it off the GPU
+                keep_on_cpu.add("slat_decoder_mesh")
+                if "slat_decoder_mesh" in p.models:
+                    try:
+                        p.models["slat_decoder_mesh"].to("cpu")
+                    except Exception:
+                        pass
                 free_cuda_cache()
                 gc.collect()
-                p.models["slat_decoder_gs"].to(self.dev)
-                with torch.cuda.device(self.dev):
-                    out_gs = p.models["slat_decoder_gs"](slat)
-                p.models["slat_decoder_gs"].to("cpu")
-                outputs = {"gaussian": out_gs}
-                decode_mode = "gaussian"
+                try:
+                    p.models["slat_decoder_gs"].to(self.dev)
+                    with torch.cuda.device(self.dev):
+                        out_gs = p.models["slat_decoder_gs"](slat)
+                    p.models["slat_decoder_gs"].to("cpu")
+                    outputs = {"gaussian": out_gs}
+                    decode_mode = "gaussian"
+                except Exception as gs_oom:
+                    # ENG-21: do not let the fallback failure mask the original.
+                    raise RuntimeError(
+                        f"TRELLIS gaussian fallback failed after a mesh-decode OOM: {gs_oom}"
+                    ) from mesh_oom
             finally:
                 for n in offload_names:
-                    if n in p.models:
+                    if n in p.models and n not in keep_on_cpu:
                         p.models[n].to(self.dev)
                 free_cuda_cache()
         else:
