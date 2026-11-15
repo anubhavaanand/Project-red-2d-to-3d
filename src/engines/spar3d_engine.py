@@ -103,6 +103,26 @@ def _vertex_colors_from_to_color(vis, n_verts: int) -> np.ndarray | None:
     return vc[:, :3] / (255.0 if vc.max() > 1.05 else 1.0)
 
 
+def _apply_foreground_crop(engine, image):
+    """Crop to the foreground, returning ``(image, error_or_None)``.
+
+    ENG-32: a failed crop was printed and ignored, so an uncropped image
+    silently degraded results with no structured signal for the caller. Returns
+    the error string so it can be recorded in metadata.
+    """
+    try:
+        return (
+            engine._foreground_crop(
+                image, crop_ratio=engine.foreground_ratio, newsize=(512, 512)
+            ),
+            None,
+        )
+    except Exception as crop_err:
+        error = f"{type(crop_err).__name__}: {crop_err}"
+        print(f"[SPAR3D] foreground_crop failed, using uncropped input ({error})")
+        return image, error
+
+
 class Spar3dEngine(AbstractEngine):
     def __init__(
         self,
@@ -271,14 +291,7 @@ class Spar3dEngine(AbstractEngine):
 
         # ENG-32: a failed crop was printed and ignored, so an uncropped image
         # silently degraded results with no structured signal. Record it.
-        crop_error = None
-        try:
-            rgba = self._foreground_crop(
-                rgba, crop_ratio=self.foreground_ratio, newsize=(512, 512)
-            )
-        except Exception as crop_err:
-            crop_error = f"{type(crop_err).__name__}: {crop_err}"
-            print(f"[SPAR3D] foreground_crop failed, using uncropped input ({crop_error})")
+        rgba, crop_error = _apply_foreground_crop(self, rgba)
 
         torch.manual_seed(42)
         np.random.seed(42)

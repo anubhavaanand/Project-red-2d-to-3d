@@ -1,65 +1,124 @@
-"""Tests for SF3D's configurable low_vram_mode (ENG-37)."""
+"""Behavioural tests for SF3D's configurable low_vram_mode (ENG-37)."""
 
-import ast
-from pathlib import Path
+import inspect
+import sys
+import types
 
-ENGINE = Path(__file__).parent.parent / "src" / "engines" / "sf3d_engine.py"
+import pytest
 
 
-def _engine_class_source():
-    src = ENGINE.read_text()
-    tree = ast.parse(src)
-    cls = next(
-        n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "SF3DEngine"
+@pytest.fixture(scope="module")
+def sf3d():
+    """Import sf3d_engine with a minimal torch stub."""
+    t = types.ModuleType("torch")
+    t.__version__ = "0.0-stub"
+    t.float32, t.int64 = "float32", "int64"
+    t.device = lambda x: x
+    t.cuda = types.SimpleNamespace(
+        is_available=lambda: False,
+        empty_cache=lambda: None,
+        device=lambda d: _NoCtx(),
     )
-    init = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == "__init__")
-    return init
+
+    class _NoCtx:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def __call__(self, fn):
+            return fn
+
+    t.no_grad = lambda: _NoCtx()
+    t.nn = types.ModuleType("torch.nn")
+    t.nn.functional = types.ModuleType("torch.nn.functional")
+    sys.modules["torch"] = t
+    sys.modules["torch.nn"] = t.nn
+    sys.modules["torch.nn.functional"] = t.nn.functional
+
+    from src.engines import sf3d_engine
+
+    return sf3d_engine
 
 
-class TestInitSignature:
-    def test_low_vram_mode_is_a_parameter(self):
-        args = {a.arg for a in _engine_class_source().args.args}
-        assert "low_vram_mode" in args
+class TestDefaults:
+    def test_low_vram_mode_defaults_to_true(self, sf3d):
+        """ENG-37 must preserve the previous T4-safe default."""
+        assert sf3d.SF3DEngine(device="cpu").low_vram_mode is True
 
-    def test_defaults_to_true(self):
-        """Preserves the previous T4-safe behaviour by default."""
-        init = _engine_class_source()
-        defaults = init.args.defaults
-        names = [a.arg for a in init.args.args]
-        idx = names.index("low_vram_mode")
-        # defaults align to the tail of args
-        default_offset = len(names) - len(defaults)
-        assert default_offset <= idx
-        default = defaults[idx - default_offset]
-        assert ast.literal_eval(default) is True
+    def test_can_be_disabled(self, sf3d):
+        assert sf3d.SF3DEngine(device="cpu", low_vram_mode=False).low_vram_mode is False
 
-    def test_stored_on_self(self):
-        body = ast.unparse(_engine_class_source())
-        assert "self.low_vram_mode = low_vram_mode" in body
+    def test_can_be_enabled_explicitly(self, sf3d):
+        assert sf3d.SF3DEngine(device="cpu", low_vram_mode=True).low_vram_mode is True
+
+    def test_other_defaults_unchanged(self, sf3d):
+        e = sf3d.SF3DEngine(device="cpu")
+        assert e.texture_resolution == 1024
+        assert e.device == "cpu"
 
 
-class TestCallSite:
-    def test_call_site_uses_the_attribute(self):
-        src = ENGINE.read_text()
+class TestPassedToFromPretrained:
+    """The attribute must actually reach SF3D.from_pretrained."""
+
+    def test_load_model_forwards_the_attribute(self, sf3d):
+        src = inspect.getsource(sf3d.SF3DEngine.load_model)
         assert "low_vram_mode=self.low_vram_mode" in src
 
-    def test_no_hardcoded_true_remains(self):
-        """ENG-37: the literal keyword argument must be gone from the call."""
-        src = ENGINE.read_text()
-        load = src[src.index("def load_model") : src.index("def predict")]
-        assert "low_vram_mode=True" not in load
+    def test_no_hardcoded_true_in_load_model(self, sf3d):
+        """ENG-37: the literal keyword argument must be gone."""
+        src = inspect.getsource(sf3d.SF3DEngine.load_model)
+        assert "low_vram_mode=True" not in src
 
-    def test_documented_default_in_info(self):
-        src = ENGINE.read_text()
-        assert "low_vram_mode=True" in src  # in the vram_approx note
+    def test_call_is_keyword_form(self, sf3d):
+        """Guards against accidentally passing it positionally."""
+        src = inspect.getsource(sf3d.SF3DEngine.load_model)
+        assert "low_vram_mode=self.low_vram_mode" in src
 
 
-class TestSourceStructure:
-    def test_engine_parses(self):
-        ast.parse(ENGINE.read_text())
+class TestEndToEndForwarding:
+    """Run load_model with a stubbed SF3D to prove the value is forwarded."""
 
-    def test_spar3d_already_had_it(self):
-        """SPAR3D exposed the knob before this fix; SF3D was the outlier."""
-        spar3d = (ENGINE.parent / "spar3d_engine.py").read_text()
-        assert "low_vram_mode: bool = False" in spar3d
-        assert "low_vram_mode=self.low_vram_mode" in spar3d
+    @staticmethod
+    def _stub_sf3d(captured):
+        class _Model:
+            def to(self, device):
+                return self
+
+            def eval(self):
+                return self
+
+        class _FakeSF3D:
+            @staticmethod
+            def from_pretrained(repo, config_name=None, weight_name=None, low_vram_mode=None):
+                captured["low_vram_mode"] = low_vram_mode
+                return _Model()
+
+        return _FakeSF3D
+
+    def test_false_is_forwarded(self, sf3d, monkeypatch):
+        captured = {}
+        fake_module = types.ModuleType("sf3d.system")
+        fake_module.SF3D = self._stub_sf3d(captured)
+        monkeypatch.setitem(sys.modules, "sf3d", types.ModuleType("sf3d"))
+        monkeypatch.setitem(sys.modules, "sf3d.system", fake_module)
+        monkeypatch.setattr(
+            sf3d.SF3DEngine, "_locate_repo", lambda self: __import__("pathlib").Path("/tmp")
+        )
+
+        sf3d.SF3DEngine(device="cpu", low_vram_mode=False).load_model()
+        assert captured["low_vram_mode"] is False
+
+    def test_true_is_forwarded(self, sf3d, monkeypatch):
+        captured = {}
+        fake_module = types.ModuleType("sf3d.system")
+        fake_module.SF3D = self._stub_sf3d(captured)
+        monkeypatch.setitem(sys.modules, "sf3d", types.ModuleType("sf3d"))
+        monkeypatch.setitem(sys.modules, "sf3d.system", fake_module)
+        monkeypatch.setattr(
+            sf3d.SF3DEngine, "_locate_repo", lambda self: __import__("pathlib").Path("/tmp")
+        )
+
+        sf3d.SF3DEngine(device="cpu", low_vram_mode=True).load_model()
+        assert captured["low_vram_mode"] is True
