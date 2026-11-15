@@ -28,6 +28,7 @@ from PIL import Image
 from .base import AbstractEngine, ReconstructionResult, Mesh3D
 from ._paths import extend_sys_path
 from ._memory import free_cuda_cache
+from ._outputs import extract_mesh_object
 
 
 class SF3DEngine(AbstractEngine):
@@ -96,7 +97,9 @@ class SF3DEngine(AbstractEngine):
             )
         latency = time.perf_counter() - t0
 
-        tm = mesh_out[0]  # trimesh.Trimesh with UV texture
+        # ENG-38: mesh_out[0] assumed a sequence; a bare Trimesh would be
+        # indexed as a vertex array and fail obscurely. Validate the payload.
+        tm = extract_mesh_object(mesh_out, engine="SF3D")  # trimesh.Trimesh with UV
         
         # Extract UV coordinates and texture map from trimesh visual
         uv_coords = None

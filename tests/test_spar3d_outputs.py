@@ -10,6 +10,7 @@ ENGINE = Path(__file__).parent.parent / "src" / "engines" / "spar3d_engine.py"
 
 
 def _extract():
+    """Compile SPAR3D's thin wrapper, backed by the real shared validator."""
     tree = ast.parse(ENGINE.read_text())
     fn = next(
         n
@@ -17,10 +18,14 @@ def _extract():
         if isinstance(n, ast.FunctionDef) and n.name == "_extract_mesh_object"
     )
     ns = {
-        "Spar3dOutputError": type("Spar3dOutputError", (RuntimeError,), {}),
+        "Spar3dOutputError": EngineOutputError,
+        "extract_mesh_object": _shared_extract,
     }
     exec(compile(ast.Module(body=[fn], type_ignores=[]), str(ENGINE), "exec"), ns)
-    return ns["_extract_mesh_object"], ns["Spar3dOutputError"]
+    return ns["_extract_mesh_object"], EngineOutputError
+
+
+from src.engines._outputs import EngineOutputError, extract_mesh_object as _shared_extract
 
 
 class _Mesh:
@@ -88,7 +93,7 @@ class TestSourceContract:
 
     def test_error_type_defined(self):
         src = ENGINE.read_text()
-        assert "class Spar3dOutputError(RuntimeError):" in src
+        assert "class Spar3dOutputError(EngineOutputError):" in src
 
     def test_engine_parses(self):
         ast.parse(ENGINE.read_text())
