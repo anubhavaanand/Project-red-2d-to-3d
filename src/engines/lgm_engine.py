@@ -33,12 +33,16 @@ LGM_NEGATIVE_PROMPT = (
 
 
 def _install_lgm_xformers_shim() -> None:
-    try:
-        import xformers.ops as _xops_real  # noqa: F401
-        if hasattr(_xops_real, "memory_efficient_attention") and hasattr(_xops_real, "unbind"):
-            return
-    except Exception:
-        pass
+    import importlib.util
+    # Only install shim if xformers is not actually installed
+    if importlib.util.find_spec("xformers") is not None:
+        try:
+            import xformers.ops as _xops_real  # noqa: F401
+            # Check for the actual function we need
+            if hasattr(_xops_real, "memory_efficient_attention"):
+                return
+        except Exception:
+            pass
     import types
     import torch.nn.functional as _F
 
