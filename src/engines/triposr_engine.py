@@ -180,7 +180,14 @@ class TriposrEngine(AbstractEngine):
             normals = np.zeros_like(verts)
 
         radius = float(self.model.renderer.cfg.radius)
-        offsets = [0.0, -0.002, -0.005]
+        # ENG-07: these offsets were fixed in model units, so an object whose
+        # scale differs from the radius they were tuned against sampled the
+        # wrong depth (thin shells got grey interiors). Scale by the actual
+        # radius, normalised against the 0.5 the values were tuned at, so the
+        # default configuration is bit-identical to before.
+        nominal_radius = 0.5
+        offset_scale = radius / nominal_radius if nominal_radius else 1.0
+        offsets = [0.0, -0.002 * offset_scale, -0.005 * offset_scale]
         base_weights = [0.60, 0.25, 0.15]
         color_accum = np.zeros((len(verts), 3), dtype=np.float32)
         weight_accum = np.zeros((len(verts), 1), dtype=np.float32)
