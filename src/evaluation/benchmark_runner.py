@@ -324,6 +324,22 @@ def load_gso_samples(
     return samples
 
 
+# EVAL-40: the alignment protocol parameters were hardcoded in align_mesh_to_gt,
+# so reproducing an old run meant editing library code. Freeze them here with the
+# values that produced the published v1.0 numbers.
+@dataclass(frozen=True)
+class ProtocolConfig:
+    """Frozen evaluation-protocol parameters (defaults = published v1.0)."""
+
+    num_surface_points: int = 10000
+    icp_iterations: int = 5
+    alignment_yaw_steps: int = 12
+    visual_yaw_steps: int = 24
+
+
+DEFAULT_PROTOCOL = ProtocolConfig()
+
+
 def _normalize_vertices_robust(verts: np.ndarray) -> tuple[np.ndarray, np.ndarray, float]:
     v = np.asarray(verts, dtype=np.float32)
     if len(v) == 0:
@@ -387,13 +403,20 @@ def _upright_yaw_rotations(n_yaw: int = 24) -> list[np.ndarray]:
 def align_mesh_to_gt(
     mesh: Mesh3D,
     gt_points: np.ndarray,
-    num_points: int = 10000,
-    n_iter: int = 5,
+    num_points: int | None = None,
+    n_iter: int | None = None,
     gt_colors: np.ndarray | None = None,
     subsample_points: int = ALIGNMENT_SUBSAMPLE_POINTS,
+    protocol: ProtocolConfig = DEFAULT_PROTOCOL,
 ) -> tuple[Mesh3D, np.ndarray]:
     import trimesh
     from scipy.spatial import cKDTree
+
+    # EVAL-40: explicit arguments still win; otherwise use the frozen protocol.
+    if num_points is None:
+        num_points = protocol.num_surface_points
+    if n_iter is None:
+        n_iter = protocol.icp_iterations
 
     norm_verts, _, _ = _normalize_vertices_robust(mesh.vertices)
     tm_norm = trimesh.Trimesh(vertices=norm_verts, faces=mesh.faces, process=False)
@@ -431,7 +454,7 @@ def align_mesh_to_gt(
 
     best_cd = float("inf")
 
-    for R_init in _candidate_rotations(12):
+    for R_init in _candidate_rotations(protocol.alignment_yaw_steps):
         R_total = R_init.copy()
         t_total = np.zeros(3, dtype=np.float32)
         pts = p_sub @ R_total.T
@@ -464,7 +487,7 @@ def align_mesh_to_gt(
     best_vis_score = float("inf")
     best_R_vis = np.eye(3, dtype=np.float32)
     best_t_vis = np.zeros(3, dtype=np.float32)
-    for R_init in _upright_yaw_rotations(24):
+    for R_init in _upright_yaw_rotations(protocol.visual_yaw_steps):
         R_total = R_init.copy()
         t_total = np.zeros(3, dtype=np.float32)
         pts = p_sub @ R_total.T
@@ -799,6 +822,7 @@ class BenchmarkRunner:
         save_mesh_limit: int = 100,
         max_wall_minutes: float | None = None,
         alignment_subsample_points: int = ALIGNMENT_SUBSAMPLE_POINTS,
+        protocol: ProtocolConfig = DEFAULT_PROTOCOL,
     ):
         self.dataset_path = Path(dataset_path)
         self.engines = engines
@@ -812,6 +836,7 @@ class BenchmarkRunner:
         self.max_wall_minutes = max_wall_minutes
         # EVAL-13: exposed so the protocol's ICP subsample is configurable.
         self.alignment_subsample_points = int(alignment_subsample_points)
+        self.protocol = protocol
         self._t_runner_start = time.perf_counter()
         self._stop_requested = False
         self._meshes_saved = 0
@@ -965,9 +990,10 @@ class BenchmarkRunner:
                         aligned_for_render, pred_pts = align_mesh_to_gt(
                             recon.mesh,
                             sample.gt_points,
-                            self.num_points,
+                            num_points=self.num_points,
                             gt_colors=sample.gt_colors,
                             subsample_points=self.alignment_subsample_points,
+                            protocol=self.protocol,
                         )
                         row["chamfer_distance"] = compute_chamfer_distance(
                             pred_pts, sample.gt_points
