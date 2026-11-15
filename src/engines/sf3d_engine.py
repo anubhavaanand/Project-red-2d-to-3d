@@ -33,9 +33,17 @@ from ._memory import free_cuda_cache
 class SF3DEngine(AbstractEngine):
     """Thin wrapper around the official SF3D pipeline."""
 
-    def __init__(self, device: str = "cuda", texture_resolution: int = 1024):
+    def __init__(
+        self,
+        device: str = "cuda",
+        texture_resolution: int = 1024,
+        low_vram_mode: bool = True,
+    ):
         self.device = device
         self.texture_resolution = texture_resolution
+        # ENG-37: low_vram_mode was hardcoded True at the call site, so hosts
+        # with more VRAM could not disable the delighting offload.
+        self.low_vram_mode = low_vram_mode
         self.model = None
         self._sf3d_dir: Path | None = None
 
@@ -65,7 +73,7 @@ class SF3DEngine(AbstractEngine):
             self.model = SF3D.from_pretrained(
                 "stabilityai/stable-fast-3d",
                 config_name="sf3d.yaml",
-                low_vram_mode=True,   # T4-safe: offloads delighting between stages
+                low_vram_mode=self.low_vram_mode,   # ENG-37: configurable; default True is T4-safe
             )
             self.model.to(self.device).eval()
         except Exception as e:
