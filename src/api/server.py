@@ -1,6 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, Security
 from fastapi.responses import FileResponse
 from fastapi.security import APIKeyHeader
+from starlette.concurrency import run_in_threadpool
 from PIL import Image
 import io
 import os
@@ -145,7 +146,8 @@ async def predict(
             except Exception as e:
                 print(f"[API] Warning: Background removal failed: {e}")
 
-        result = engine.predict(image)
+        # Run blocking GPU inference in threadpool to avoid blocking the event loop
+        result = await run_in_threadpool(engine.predict, image)
 
         if result.mesh is not None:
             out_filename = f"{uuid.uuid4().hex}.glb"
