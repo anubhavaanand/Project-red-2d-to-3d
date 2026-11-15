@@ -31,4 +31,6 @@ python scripts/rebuild_figures.py
 
 ## Columns
 
-`engine`, `sample_id`, `latency_s`, `vram_peak_gb`, `chamfer_distance`, `f_score_0.1`, `f_score_0.2`, `f_score_0.5`, `psnr`, `lpips`, `metadata`, `vertex_count`, `face_count`, `mesh_size_mb`.
+`engine`, `sample_id`, `latency_s`, `vram_peak_gb`, `vram_reserved_gb`, `chamfer_distance`, `f_score_0.1`, `f_score_0.2`, `f_score_0.5`, `psnr`, `lpips`, `metadata`, `vertex_count`, `face_count`, `mesh_size_mb`.
+
+`vram_peak_gb` is \`torch.cuda.max_memory_allocated()\` — what the published v1.0 table reports. \`vram_reserved_gb\` is \`torch.cuda.max_memory_reserved()\`, which includes the CUDA context and allocator fragmentation and so runs higher; it is provided for comparison with \`nvidia-smi\` and does not replace the frozen figure.
