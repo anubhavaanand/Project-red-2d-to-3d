@@ -96,8 +96,12 @@ def merge_all(search_dirs):
     print(summary.to_string())
 
     tex_path = out_dir / "unified_4models_table.tex"
-    tex_path.write_text(summary.reset_index().to_latex(index=False, na_rep="--"))
-    print(f"\nSaved CSV and LaTeX table to {out_dir}")
+    try:
+        tex_path.write_text(summary.reset_index().to_latex(index=False, na_rep="--"))
+        print(f"\nSaved CSV and LaTeX table to {out_dir}")
+    except ImportError as e:
+        # jinja2 is only needed for DataFrame.to_latex; the CSV is already written.
+        print(f"\nSaved CSV to {out_dir} (skipped LaTeX table: {e})")
 
 
 if __name__ == "__main__":
