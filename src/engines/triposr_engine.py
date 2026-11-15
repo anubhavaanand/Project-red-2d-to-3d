@@ -25,9 +25,15 @@ def _skimage_mc_func(level, iso=0.0):
     import torch
     from skimage import measure
 
-    if level.dim() == 4:
-        level = level.squeeze(0)
-    vol = level.detach().cpu().numpy().astype(np.float32)
+    # ENG-04: accept array-likes, not just tensors. The original called
+    # level.dim() outside the try, so a NumPy array raised AttributeError
+    # instead of producing a mesh.
+    if hasattr(level, "dim"):
+        if level.dim() == 4:
+            level = level.squeeze(0)
+        vol = level.detach().cpu().numpy().astype(np.float32)
+    else:
+        vol = np.asarray(level, dtype=np.float32)
     try:
         v, f, _, _ = measure.marching_cubes(vol, float(iso))
         v = np.ascontiguousarray(v[:, [2, 1, 0]], dtype=np.float32)
