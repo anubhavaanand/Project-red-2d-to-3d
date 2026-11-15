@@ -18,37 +18,16 @@ from .base import AbstractEngine, ReconstructionResult, Mesh3D
 from ._compat import spar3d_compat_shims
 from ._paths import extend_sys_path
 from ._memory import free_cuda_cache
+from ._outputs import EngineOutputError, extract_mesh_object
 
 
-class Spar3dOutputError(RuntimeError):
+class Spar3dOutputError(EngineOutputError):
     """ENG-36: raised when SPAR3D returns a payload we cannot read a mesh from."""
 
 
 def _extract_mesh_object(mesh_out):
-    """Return the mesh object from SPAR3D's run_image() output.
-
-    ENG-36: the previous code did
-    ``mesh_out[0] if isinstance(mesh_out, (list, tuple)) else mesh_out``, which
-    silently accepted a dict or scene (indexing a dict by 0 raises KeyError, and
-    a scene is not a mesh). Validate instead.
-    """
-    if isinstance(mesh_out, (list, tuple)):
-        if not mesh_out:
-            raise Spar3dOutputError("SPAR3D returned an empty sequence")
-        return mesh_out[0]
-
-    if isinstance(mesh_out, dict):
-        raise Spar3dOutputError(
-            f"SPAR3D returned a dict (keys: {sorted(mesh_out)}); expected a mesh"
-        )
-
-    if not hasattr(mesh_out, "vertices") or not hasattr(mesh_out, "faces"):
-        raise Spar3dOutputError(
-            f"SPAR3D returned {type(mesh_out).__name__}, which has no "
-            "vertices/faces"
-        )
-
-    return mesh_out
+    """Return SPAR3D's mesh object, validating the payload (ENG-36)."""
+    return extract_mesh_object(mesh_out, engine="SPAR3D")
 
 
 class Spar3dEngine(AbstractEngine):
