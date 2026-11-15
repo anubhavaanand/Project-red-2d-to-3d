@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 
 from ..engines.base import GaussianCloud
+from ._validate import require_finite
 
 
 def export_ply(gaussians: GaussianCloud, filepath: str) -> None:
@@ -17,6 +18,13 @@ def export_ply(gaussians: GaussianCloud, filepath: str) -> None:
 
     pos = np.asarray(gaussians.positions, dtype=np.float32)
     n = len(pos)
+
+    # EXP-04: fail fast on non-finite splats rather than writing a broken file.
+    require_finite("positions", gaussians.positions)
+    require_finite("scales", gaussians.scales)
+    require_finite("rotations", gaussians.rotations)
+    require_finite("opacities", gaussians.opacities)
+    require_finite("sh_coeffs", gaussians.sh_coeffs)
 
     # Scale attributes
     if gaussians.scales is not None:
