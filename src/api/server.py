@@ -1,10 +1,13 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, Security
 from fastapi.responses import FileResponse
+from fastapi.security import APIKeyHeader
 from PIL import Image
 import io
 import os
+import time
 import uuid
 from typing import Dict, Any
+from collections import defaultdict
 
 from ..config import EngineType
 from ..engines import AbstractEngine, TriposrEngine, LGMEngine, TrellisEngine
@@ -12,6 +15,31 @@ from ..export.glb_exporter import export_glb
 from ..export.ply_exporter import export_ply
 
 app = FastAPI(title="Image-to-3D Benchmark API")
+
+# SECURITY: API key authentication
+API_KEY = os.environ.get("API_KEY")
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+async def verify_api_key(api_key: str = Security(api_key_header)):
+    if not API_KEY:
+        return True  # No auth required if API_KEY not set
+    if api_key != API_KEY:
+        raise HTTPException(status_code=403, detail="Invalid API key")
+    return True
+
+# SECURITY: Simple rate limiting (requests per minute per IP)
+_rate_limits: Dict[str, list] = defaultdict(list)
+RATE_LIMIT = 10  # requests per minute
+
+async def rate_limit(request):
+    import time
+    client_ip = request.client.host if request.client else "unknown"
+    now = time.time()
+    _rate_limits[client_ip] = [t for t in _rate_limits[client_ip] if now - t < 60]
+    if len(_rate_limits[client_ip]) >= RATE_LIMIT:
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
+    _rate_limits[client_ip].append(now)
+    return True
 
 # Lazy engine cache
 _engines: Dict[EngineType, AbstractEngine] = {}
@@ -72,8 +100,11 @@ def list_engines():
 
 @app.post("/predict")
 async def predict(
+    request,
     file: UploadFile = File(...),
-    engine_type: EngineType = Form(...)
+    engine_type: EngineType = Form(...),
+    _api_key: bool = Depends(verify_api_key),
+    _rate_limit: bool = Depends(rate_limit),
 ):
     try:
         engine = get_engine(engine_type)
