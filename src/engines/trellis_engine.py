@@ -31,7 +31,9 @@ from ._memory import free_cuda_cache
 # engine is imported — but setting them at module scope mutated global state
 # for every importer. load_model() now sets them just before the import.
 
-OutputFormat = Literal["mesh", "gaussian", "radiance_field"]
+# ENG-27: TRELLIS's pipeline can decode a radiance field, but predict() only
+# consumes mesh and gaussian, so only those are accepted.
+OutputFormat = Literal["mesh", "gaussian"]
 
 
 class TrellisOutputError(RuntimeError):
@@ -179,6 +181,15 @@ class TrellisEngine(AbstractEngine):
 
         t0 = time.perf_counter()
         decode_mode = self.output_format
+
+        # ENG-27: "radiance_field" is in the Literal but neither predict branch
+        # implements it — it would fall through to the gaussian path and return
+        # the wrong artefact. Reject it explicitly.
+        if decode_mode not in ("mesh", "gaussian"):
+            raise TrellisOutputError(
+                f"output_format={decode_mode!r} is not implemented; "
+                "use 'mesh' or 'gaussian'"
+            )
 
         if self.staged_offload and self.output_format == "mesh":
             img = p.preprocess_image(rgba)
