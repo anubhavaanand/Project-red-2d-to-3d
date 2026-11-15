@@ -4,11 +4,14 @@ from fastapi.security import APIKeyHeader
 from starlette.concurrency import run_in_threadpool
 from PIL import Image
 import io
+import logging
 import os
 import time
 import uuid
 from typing import Dict, Any
 from collections import defaultdict
+
+logger = logging.getLogger(__name__)
 
 from ..config import EngineType
 from ..engines import AbstractEngine, TriposrEngine, LGMEngine, TrellisEngine
@@ -162,6 +165,18 @@ async def predict(
         else:
             raise HTTPException(status_code=500, detail="Engine returned neither mesh nor gaussians.")
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Internal server error")
+    except HTTPException:
+        # Preserve deliberate 4xx/5xx responses (bad input, missing engine output).
+        # Without this, they would be swallowed and rewritten as a generic 500.
+        raise
+    except Exception:
+        # SECURITY: never return exception text to the client (paths, model and
+        # library internals). Log the detail server-side with a request ID the
+        # operator can correlate.
+        request_id = uuid.uuid4().hex
+        logger.exception("Prediction failed (request_id=%s)", request_id)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error (request_id={request_id})",
+        )
 
