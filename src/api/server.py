@@ -7,6 +7,7 @@ from PIL import Image
 import io
 import logging
 import os
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -58,22 +59,52 @@ async def rate_limit(request):
 # Lazy engine cache
 _engines: Dict[EngineType, AbstractEngine] = {}
 _bg_remover = None  # Lazy background remover
+_bg_lock = threading.Lock()  # API-07: guards _bg_remover creation
+
+# API-07: get_engine is a check-then-construct. Two concurrent first-requests
+# for the same engine could both see the cache empty and each load the
+# multi-GB model, OOMing the GPU. A per-engine lock makes construction
+# happen exactly once; the outer check keeps the common case lock-free.
+_engine_locks: Dict[EngineType, threading.Lock] = {}
+_engine_locks_guard = threading.Lock()
+
+
+def _lock_for(engine_type: EngineType) -> threading.Lock:
+    with _engine_locks_guard:
+        lock = _engine_locks.get(engine_type)
+        if lock is None:
+            lock = threading.Lock()
+            _engine_locks[engine_type] = lock
+        return lock
+
 
 def get_engine(engine_type: EngineType) -> AbstractEngine:
-    if engine_type not in _engines:
+    engine = _engines.get(engine_type)
+    if engine is not None:
+        return engine
+
+    with _lock_for(engine_type):
+        # Re-check inside the lock: another thread may have built it while we
+        # were waiting.
+        engine = _engines.get(engine_type)
+        if engine is not None:
+            return engine
+
         if engine_type == EngineType.TRIPOSR:
-            _engines[engine_type] = TriposrEngine()
+            engine = TriposrEngine()
         elif engine_type == EngineType.LGM:
-            _engines[engine_type] = LGMEngine()
+            engine = LGMEngine()
         elif engine_type == EngineType.TRELLIS:
-            _engines[engine_type] = TrellisEngine()
+            engine = TrellisEngine()
         elif engine_type == EngineType.SPAR3D:
-            _engines[engine_type] = Spar3dEngine()
+            engine = Spar3dEngine()
         elif engine_type == EngineType.SF3D:
-            _engines[engine_type] = SF3DEngine()
+            engine = SF3DEngine()
         else:
             raise ValueError(f"Unknown engine: {engine_type}")
-    return _engines[engine_type]
+
+        _engines[engine_type] = engine
+        return engine
 
 # API-05: ExportConfig.output_dir was never read; the API hardcoded ./outputs.
 # Load AppConfig at import time and honour an env override for deployments that
@@ -231,10 +262,14 @@ async def predict(
     # Initialize background remover (lazy)
     global _bg_remover
     if _bg_remover is None:
-        try:
-            _bg_remover = BackgroundRemover()
-        except Exception as e:
-            print(f"[API] Warning: Could not initialize background remover: {e}")
+        # API-07: double-checked, so concurrent first-requests cannot each
+        # build their own session.
+        with _bg_lock:
+            if _bg_remover is None:
+                try:
+                    _bg_remover = BackgroundRemover()
+                except Exception as e:
+                    print(f"[API] Warning: Could not initialize background remover: {e}")
 
     try:
         contents = await file.read()
