@@ -305,11 +305,26 @@ if __name__ == "__main__":
     Path("examples").mkdir(exist_ok=True)
 
     app = build_ui()
+    
+    # Security: require authentication for public deployments
+    # Set GRADIO_USERNAME and GRADIO_PASSWORD env vars to enable auth
+    # If not set, app runs in local-only mode (no public share)
+    auth_username = os.environ.get("GRADIO_USERNAME")
+    auth_password = os.environ.get("GRADIO_PASSWORD")
+    
+    auth = None
+    if auth_username and auth_password:
+        auth = (auth_username, auth_password)
+        print(f"[SECURITY] Authentication enabled for user: {auth_username}")
+    else:
+        print("[SECURITY] No credentials set — running in local-only mode (share=False)")
+    
     app.launch(
         server_name="0.0.0.0",
         server_port=int(os.environ.get("PORT", 7860)),
-        share=True,         # generates a public gradio.live link
-        show_error=True,
+        share=False,         # SECURITY FIX: never auto-create public tunnel
+        auth=auth,           # SECURITY FIX: require auth if credentials provided
+        show_error=not auth, # only show errors in local mode
     )
 
 
