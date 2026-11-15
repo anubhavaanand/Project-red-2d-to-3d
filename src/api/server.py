@@ -4,6 +4,7 @@ from fastapi.security import APIKeyHeader
 from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
 from PIL import Image
+import asyncio
 import io
 import logging
 import os
@@ -45,6 +46,13 @@ async def verify_api_key(api_key: str = Security(api_key_header)):
 # SECURITY: Simple rate limiting (requests per minute per IP)
 _rate_limits: Dict[str, list] = defaultdict(list)
 RATE_LIMIT = 10  # requests per minute
+
+# API-09: nothing bounded concurrent inference, so N simultaneous requests
+# meant N models resident on one GPU. A semaphore caps in-flight predictions;
+# the timeout stops one slow request from blocking the queue behind it.
+MAX_CONCURRENT_INFERENCE = int(os.environ.get("MAX_CONCURRENT_INFERENCE", "1"))
+INFERENCE_TIMEOUT_S = float(os.environ.get("INFERENCE_TIMEOUT_S", "600"))
+_inference_slots = asyncio.Semaphore(MAX_CONCURRENT_INFERENCE)
 
 async def rate_limit(request):
     import time
@@ -163,6 +171,25 @@ def _sweep_output_dir(max_age_s: float = 3600.0) -> int:
 
 
 _sweep_output_dir()
+
+
+async def _run_inference(call):
+    """Run a blocking engine call under the concurrency cap and timeout.
+
+    API-09: without this, every request ran its own inference immediately, so
+    N simultaneous requests meant N models resident on one GPU.
+    """
+    async with _inference_slots:
+        try:
+            return await asyncio.wait_for(
+                run_in_threadpool(call), timeout=INFERENCE_TIMEOUT_S
+            )
+        except asyncio.TimeoutError:
+            logger.error("Inference exceeded %.0fs", INFERENCE_TIMEOUT_S)
+            raise HTTPException(
+                status_code=504,
+                detail=f"Inference timed out after {INFERENCE_TIMEOUT_S:.0f}s",
+            )
 
 @app.get("/health")
 def health_check():
@@ -300,7 +327,7 @@ async def predict(
         # fixed at construction, so the request is only honoured where it can be.
         if engine_type == EngineType.LGM:
             want_mesh = requested_format != "gaussians"
-            result = await run_in_threadpool(engine.predict, image, want_mesh)
+            call = lambda: engine.predict(image, want_mesh)
         else:
             mesh_only = {
                 EngineType.TRIPOSR: "TripoSR",
@@ -313,7 +340,10 @@ async def predict(
                     detail=f"{mesh_only[engine_type]} only produces a mesh; "
                     "use output_format='mesh'.",
                 )
-            result = await run_in_threadpool(engine.predict, image)
+            call = lambda: engine.predict(image)
+
+        # API-09: bound concurrency and wait no longer than the timeout.
+        result = await _run_inference(call)
 
         # API-03: prefer whichever artefact the caller asked for, then fall
         # back to whatever the engine produced.
