@@ -177,8 +177,12 @@ class LGMEngine(AbstractEngine):
         input_image = (input_image - mean) / std
         input_image = torch.cat([input_image, self.rays_embeddings], dim=1).unsqueeze(0)
 
+        # ENG-15: torch.autocast(device_type="cuda") raises on a CPU-only host.
+        # Derive the type from the engine's actual device; "cuda:0" is a valid
+        # torch device but not a valid autocast device_type.
+        device_type = str(self.device).split(":")[0]
         with torch.no_grad():
-            with torch.autocast(device_type="cuda", dtype=torch.float16):
+            with torch.autocast(device_type=device_type, dtype=torch.float16):
                 gaussians = self.model.forward_gaussians(input_image)
 
         t_unet = time.perf_counter()
