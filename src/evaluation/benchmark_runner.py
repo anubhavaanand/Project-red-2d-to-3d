@@ -183,7 +183,22 @@ def load_gso_samples(
         obj_dirs = [root / o for o in object_ids]
         print(f"[GSO Loader] using explicit object_ids ({len(obj_dirs)}): {object_ids}")
     else:
-        obj_dirs = sorted([d for d in root.iterdir() if d.is_dir()])[:num_samples]
+        # Check for handpicked.txt (curated set) first
+        handpicked_path = Path(__file__).parent.parent.parent / "handpicked.txt"
+        if not handpicked_path.exists():
+            handpicked_path = Path("/home/anubhavanand/Desktop/reasearch papers/handpicked.txt")
+        
+        if handpicked_path.exists():
+            with open(handpicked_path) as f:
+                object_ids = [line.strip() for line in f if line.strip() and not line.startswith("#")]
+            _missing = [o for o in object_ids if not (root / o).is_dir()]
+            if _missing:
+                print(f"[GSO Loader] WARNING: {len(_missing)} handpicked objects not found in dataset")
+            obj_dirs = [root / o for o in object_ids if (root / o).is_dir()][:num_samples]
+            print(f"[GSO Loader] using handpicked.txt ({len(obj_dirs)} objects)")
+        else:
+            obj_dirs = sorted([d for d in root.iterdir() if d.is_dir()])[:num_samples]
+            print(f"[GSO Loader] WARNING: No handpicked.txt found, using alphabetical order ({len(obj_dirs)} objects)")
 
     for obj_dir in obj_dirs:
         if (obj_dir / "images" / "000.png").exists():
