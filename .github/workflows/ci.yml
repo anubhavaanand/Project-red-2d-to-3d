@@ -137,37 +137,5 @@ jobs:
           pip install -e .
           pip install pandas
 
-      - name: Validate results CSV schema
-        run: |
-          python -c "
-          import pandas as pd
-          import sys
-
-          df = pd.read_csv('results/unified_results_4engines_100obj.csv')
-          required_cols = [
-              'engine', 'sample_id', 'latency_s', 'vram_peak_gb',
-              'chamfer_distance', 'f_score_0.1', 'f_score_0.2', 'f_score_0.5',
-              'psnr', 'lpips'
-          ]
-          missing = [c for c in required_cols if c not in df.columns]
-          if missing:
-              print(f'ERROR: Missing columns: {missing}')
-              sys.exit(1)
-
-          if len(df) != 400:
-              print(f'ERROR: Expected 400 rows, got {len(df)}')
-              sys.exit(1)
-
-          engines = df['engine'].unique()
-          expected = {'TripoSR', 'LGM', 'TRELLIS', 'SPAR3D'}
-          if set(engines) != expected:
-              print(f'ERROR: Expected engines {expected}, got {set(engines)}')
-              sys.exit(1)
-
-          for col in ['chamfer_distance', 'f_score_0.1', 'f_score_0.2', 'psnr']:
-              if df[col].isna().any():
-                  print(f'ERROR: NaN values in {col}')
-                  sys.exit(1)
-
-          print('Results CSV contract validation PASSED')
-          "
+      - name: Validate results CSV contract
+        run: python scripts/validate_results.py

@@ -144,7 +144,7 @@ def main():
             errors += 1
 
     print()
-    print(f"=== SUMMARY ===")
+    print("=== SUMMARY ===")
     print(f"  Labeled: {labeled}")
     print(f"  Skipped: {skipped}")
     print(f"  Errors: {errors}")

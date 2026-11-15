@@ -14,8 +14,6 @@ Also checks:
 """
 
 import csv
-import json
-import os
 from collections import defaultdict
 from pathlib import Path
 
@@ -118,25 +116,25 @@ def classify_run(input_img, output_img):
     """Classify a run based on visual characteristics."""
     if input_img is None or output_img is None:
         return "MISSING", 0.0, 0.0, 0.0
-    
+
     ssim_val = compute_ssim(input_img, output_img)
     hist_corr = compute_histogram_correlation(input_img, output_img)
     output_colorfulness = compute_colorfulness(output_img)
     output_shading = compute_shading_gradient(output_img)
     output_edges = compute_edge_density(output_img)
-    
+
     # Check for degenerate (blank/grey) output
     if output_colorfulness < 2.0 and output_shading < 1.0:
         return "DEGENERATE", ssim_val, hist_corr, output_colorfulness
-    
+
     # Check for pass-through (output very similar to input)
     if ssim_val > 0.90:
         return "PASS_THROUGH", ssim_val, hist_corr, output_colorfulness
-    
+
     # Check for good 3D reconstruction (different from input but has 3D cues)
     if ssim_val < 0.70 and output_colorfulness > 5.0 and output_shading > 1.5:
         return "GOOD", ssim_val, hist_corr, output_colorfulness
-    
+
     # Default: partial
     return "PARTIAL", ssim_val, hist_corr, output_colorfulness
 
@@ -144,32 +142,32 @@ def analyze_all_runs():
     """Analyze all 400 runs."""
     results = []
     categories = defaultdict(lambda: defaultdict(int))
-    
+
     for batch_dir, engines in BATCH_ENGINES.items():
         for engine_dir_name, engine_display_name in engines:
             outputs_dir = KAGGLE_RUNS / batch_dir / "outputs"
             qual_base = outputs_dir / engine_dir_name / "qualitative"
-            
+
             if not qual_base.exists():
                 print(f"[SKIP] {qual_base} not found")
                 continue
-            
+
             obj_dirs = sorted([d for d in qual_base.iterdir() if d.is_dir()])
             print(f"Analyzing {engine_display_name} ({len(obj_dirs)} objects)...")
-            
+
             for obj_dir in obj_dirs:
                 sample_id = obj_dir.name
-                
+
                 input_path = find_file_case_insensitive(obj_dir, "input.png")
                 output_path = find_file_case_insensitive(obj_dir, f"{engine_display_name}_novel.png")
                 gt_path = find_file_case_insensitive(obj_dir, "gt_novel.png")
-                
+
                 input_img = load_image(input_path)
                 output_img = load_image(output_path)
-                
+
                 category, ssim_val, hist_corr, colorfulness = classify_run(input_img, output_img)
                 categories[engine_display_name][category] += 1
-                
+
                 results.append({
                     "engine": engine_display_name,
                     "sample_id": sample_id,
@@ -182,15 +180,15 @@ def analyze_all_runs():
                     "output_exists": output_path is not None,
                     "gt_exists": gt_path is not None,
                 })
-    
+
     return results, categories
 
 def main():
     print("=== Visual Analysis of 400 Runs (Programmatic) ===")
     print()
-    
+
     results, categories = analyze_all_runs()
-    
+
     # Save CSV
     csv_path = OUTPUT_DIR / "visual_analysis_400runs.csv"
     with open(csv_path, "w", newline="") as f:
@@ -198,7 +196,7 @@ def main():
         writer.writeheader()
         writer.writerows(results)
     print(f"\nSaved {len(results)} results to {csv_path}")
-    
+
     # Print summary
     print("\n=== CATEGORY SUMMARY ===")
     for engine in ["TripoSR", "LGM", "TRELLIS", "SPAR3D"]:
@@ -211,7 +209,7 @@ def main():
             count = counts.get(cat, 0)
             if count > 0:
                 print(f"    {cat}: {count} ({100*count/total:.1f}%)")
-    
+
     # List problematic runs
     problematic = [r for r in results if r["category"] in ("PASS_THROUGH", "DEGENERATE", "MISSING")]
     if problematic:
@@ -220,7 +218,7 @@ def main():
             print(f"   {r['engine']}/{r['sample_id']}: {r['category']} (SSIM={r['ssim']:.3f})")
     else:
         print("\n✅ No problematic runs found - all outputs are valid 3D reconstructions")
-    
+
     # Save markdown report
     md_path = OUTPUT_DIR / "VISION_ANALYSIS_REPORT.md"
     lines = ["# Visual Analysis Report — 400 Benchmark Runs", ""]
@@ -252,7 +250,7 @@ def main():
         if total == 0:
             continue
         lines.append(f"| {engine} | {total} | {counts.get('GOOD',0)} | {counts.get('PARTIAL',0)} | {counts.get('PASS_THROUGH',0)} | {counts.get('DEGENERATE',0)} |")
-    
+
     lines.append("")
     lines.append("## Problematic Runs")
     lines.append("")
@@ -263,24 +261,24 @@ def main():
             lines.append(f"- `{r['engine']}/{r['sample_id']}` — {r['category']} (SSIM={r['ssim']:.3f})")
     else:
         lines.append("✅ **No problematic runs found** — all 400 outputs are valid 3D reconstructions")
-    
+
     lines.append("")
     lines.append("## Key Findings")
     lines.append("")
-    
+
     # Calculate overall stats
     all_counts = defaultdict(int)
     for engine_counts in categories.values():
         for cat, count in engine_counts.items():
             all_counts[cat] += count
-    
+
     total_runs = sum(all_counts.values())
     lines.append(f"- **Total runs analyzed:** {total_runs}")
     lines.append(f"- **GOOD (proper 3D reconstruction):** {all_counts.get('GOOD',0)} ({100*all_counts.get('GOOD',0)/total_runs:.1f}%)")
     lines.append(f"- **PARTIAL (some artifacts):** {all_counts.get('PARTIAL',0)} ({100*all_counts.get('PARTIAL',0)/total_runs:.1f}%)")
     lines.append(f"- **PASS_THROUGH (identical to input):** {all_counts.get('PASS_THROUGH',0)} ({100*all_counts.get('PASS_THROUGH',0)/total_runs:.1f}%)")
     lines.append(f"- **DEGENERATE (blank/grey):** {all_counts.get('DEGENERATE',0)} ({100*all_counts.get('DEGENERATE',0)/total_runs:.1f}%)")
-    
+
     md_path.write_text("\n".join(lines))
     print(f"\nSaved report to {md_path}")
     print(f"\nAll output in: {OUTPUT_DIR}")
