@@ -130,11 +130,14 @@ class TriposrEngine(AbstractEngine):
 
         tsr_iso.marching_cubes = _skimage_mc_func
 
-        _orig_load_state_dict = TSR.load_state_dict
-        def _remap_load_state_dict(self_model, state_dict, strict=False, **kwargs):
-            state_dict = _remap_vit_checkpoint_keys(state_dict, self_model)
-            return _orig_load_state_dict(self_model, state_dict, strict=False, **kwargs)
-        TSR.load_state_dict = _remap_load_state_dict
+        # SECURITY: Only wrap load_state_dict once to prevent nested wrapping
+        if not hasattr(TSR, '_state_dict_wrapped'):
+            _orig_load_state_dict = TSR.load_state_dict
+            def _remap_load_state_dict(self_model, state_dict, strict=False, **kwargs):
+                state_dict = _remap_vit_checkpoint_keys(state_dict, self_model)
+                return _orig_load_state_dict(self_model, state_dict, strict=False, **kwargs)
+            TSR.load_state_dict = _remap_load_state_dict
+            TSR._state_dict_wrapped = True
 
         print("[TripoSR] Loading stabilityai/TripoSR …")
         # SECURITY NOTE: TripoSR uses torch.load (pickle) internally for .ckpt files.
