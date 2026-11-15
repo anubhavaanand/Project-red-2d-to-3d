@@ -619,6 +619,12 @@ def render_gso_mesh_view(
         uv = getattr(vis, "uv", None) if vis is not None else None
 
         if uv is not None and len(uv) == len(tm.vertices) and tex_img is not None:
+            # Attach UV and texture to trimesh visual before rendering
+            import trimesh.visual
+            tm.visual = trimesh.visual.TextureVisuals(
+                uv=uv,
+                image=tex_img.convert("RGBA")
+            )
             mat = pyrender.MetallicRoughnessMaterial(
                 baseColorFactor=[1.0, 1.0, 1.0, 1.0],
                 baseColorTexture=tex_img.convert("RGBA"),
