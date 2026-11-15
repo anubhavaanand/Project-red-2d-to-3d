@@ -30,6 +30,35 @@ def _extract_mesh_object(mesh_out):
     return extract_mesh_object(mesh_out, engine="SPAR3D")
 
 
+def _to_rgb_array(tex_img) -> np.ndarray | None:
+    """Return a texture as float RGB in [0, 1], whatever container it arrives in.
+
+    ENG-35: the code called tex_img.convert("RGB") unconditionally, which raises
+    AttributeError for a NumPy texture and silently skipped colour extraction.
+    """
+    if tex_img is None:
+        return None
+
+    # PIL image
+    if hasattr(tex_img, "convert"):
+        try:
+            return np.asarray(tex_img.convert("RGB"), dtype=np.float32) / 255.0
+        except Exception:
+            return None
+
+    # NumPy array / array-like
+    arr = np.asarray(tex_img)
+    if arr.ndim == 2:
+        arr = np.stack([arr] * 3, axis=-1)
+    if arr.ndim != 3 or arr.shape[2] < 3:
+        return None
+
+    rgb = arr[..., :3].astype(np.float32)
+    if rgb.size and float(np.nanmax(rgb)) > 1.5:
+        rgb = rgb / 255.0
+    return rgb
+
+
 class Spar3dEngine(AbstractEngine):
     def __init__(
         self,
@@ -131,7 +160,9 @@ class Spar3dEngine(AbstractEngine):
 
             vcols = None
             if uv is not None and tex_img is not None and len(uv) == len(verts):
-                rgb = np.asarray(tex_img.convert("RGB"), dtype=np.float32) / 255.0
+                rgb = _to_rgb_array(tex_img)
+                if rgb is None:
+                    return None
                 h, w = rgb.shape[:2]
                 u = np.clip(np.nan_to_num(np.asarray(uv[:, 0], dtype=np.float64), nan=0.5), 0.0, 1.0)
                 v = np.clip(np.nan_to_num(np.asarray(uv[:, 1], dtype=np.float64), nan=0.5), 0.0, 1.0)
