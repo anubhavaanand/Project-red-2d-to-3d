@@ -280,14 +280,21 @@ Upload any photo of an object and get a downloadable 3D model.
 > Background removal is applied automatically.
 """
 
+# APP-07: resolve examples relative to this file, not the process CWD, so the
+# UI works when started from another directory or imported by a server.
+EXAMPLES_DIR = Path(__file__).resolve().parent / "examples"
 EXAMPLES = [
-    ["examples/rubber_duck.jpg", "TripoSR", True],
-    ["examples/sneaker.jpg", "TRELLIS", True],
-    ["examples/vase.jpg", "LGM", True],
+    [str(EXAMPLES_DIR / "rubber_duck.jpg"), "TripoSR", True],
+    [str(EXAMPLES_DIR / "sneaker.jpg"), "TRELLIS", True],
+    [str(EXAMPLES_DIR / "vase.jpg"), "LGM", True],
 ]
 
 
 def build_ui() -> gr.Blocks:
+    # APP-07: create here, not in __main__, so a server that imports build_ui
+    # also gets the directory.
+    EXAMPLES_DIR.mkdir(exist_ok=True)
+
     with gr.Blocks(title="Image → 3D Model", theme=gr.themes.Soft()) as demo:
         gr.Markdown(DESCRIPTION)
 
@@ -353,9 +360,6 @@ This app is the production demo for:
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    # Create example directory if it doesn't exist
-    Path("examples").mkdir(exist_ok=True)
-
     app = build_ui()
 
     # Security: require authentication for public deployments
