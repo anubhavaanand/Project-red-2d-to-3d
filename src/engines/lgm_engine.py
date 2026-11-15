@@ -237,12 +237,19 @@ class LGMEngine(AbstractEngine):
 
         t_unet = time.perf_counter()
 
-        g = gaussians.squeeze(0).detach().cpu().numpy().astype(np.float32)
-        pos = g[..., 0:3]
-        opa = g[..., 3:4]
-        scl = g[..., 4:7]
-        rot = g[..., 7:11]
-        rgb = np.clip(g[..., 11:14], 0.0, 1.0)
+        g = gaussians.detach().cpu().numpy().astype(np.float32)
+        # LGM outputs (B, C, H, W) — reshape to (N, 14) where N = B*H*W
+        # For batch size 1: (1, 14, H, W) -> (H*W, 14)
+        # For batch size B: (B, 14, H, W) -> (B*H*W, 14)
+        B, C, H, W = g.shape
+        assert C == 14, f"Expected 14 channels, got {C}"
+        g = g.transpose(0, 2, 3, 1).reshape(-1, 14)  # (B, H, W, 14) -> (B*H*W, 14)
+        
+        pos = g[:, 0:3]
+        opa = g[:, 3:4]
+        scl = g[:, 4:7]
+        rot = g[:, 7:11]
+        rgb = np.clip(g[:, 11:14], 0.0, 1.0)
 
         gaussians_out = GaussianCloud(
             positions=pos,
