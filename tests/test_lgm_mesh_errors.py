@@ -108,7 +108,7 @@ class TestOuterExceptChains:
         with pytest.raises(lgm.LgmMeshExtractionError) as exc:
             engine._gaussians_to_mesh(cloud, resolution=16)
         # the original exception must be preserved as __cause__
-        assert exc.value.__cause__ is not None
+        assert isinstance(exc.value.__cause__, ValueError)
         assert "synthetic failure" in str(exc.value.__cause__)
 
 

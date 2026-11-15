@@ -42,7 +42,7 @@ jobs:
       - name: Install test dependencies
         run: |
           pip install -e .
-          pip install pytest numpy pillow scipy trimesh pandas
+          pip install pytest numpy pillow scipy trimesh pandas scikit-image networkx
 
       - name: Run pytest
         run: pytest tests/ -q
