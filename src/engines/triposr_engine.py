@@ -281,6 +281,8 @@ class TriposrEngine(AbstractEngine):
             faces=np.asarray(mesh_obj.faces, dtype=np.int64),
             vertex_colors=vertex_colors,
         )
+        # ENG-42: validate at the source rather than in export/rendering.
+        result_mesh.validate()
         free_cuda_cache()
 
         return ReconstructionResult(

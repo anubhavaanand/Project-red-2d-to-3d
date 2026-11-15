@@ -317,6 +317,8 @@ class Spar3dEngine(AbstractEngine):
             uv_coords=uv_coords,
             texture_map=tex_map,
         )
+        # ENG-42: validate at the source rather than in export/rendering.
+        mesh.validate()
         free_cuda_cache()
 
         return ReconstructionResult(
