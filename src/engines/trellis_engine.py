@@ -33,6 +33,23 @@ os.environ.setdefault("ATTN_BACKEND", "xformers")
 OutputFormat = Literal["mesh", "gaussian", "radiance_field"]
 
 
+class TrellisOutputError(RuntimeError):
+    """ENG-22: raised when the TRELLIS pipeline returns an unexpected payload."""
+
+
+def _first_of(value, label: str):
+    """Return the first element of a pipeline output, whatever container it is.
+
+    ENG-22: TRELLIS returns a list for most decoders, but indexing
+    ``outputs["mesh"][0]`` blindly assumed both the key and the sequence type.
+    """
+    if value is None:
+        return None
+    if isinstance(value, (list, tuple)):
+        return value[0] if value else None
+    return value
+
+
 class TrellisEngine(AbstractEngine):
     def __init__(
         self,
@@ -210,7 +227,13 @@ class TrellisEngine(AbstractEngine):
         }
 
         if decode_mode == "mesh":
-            raw = outputs["mesh"][0]
+            # ENG-22: outputs["mesh"] is indexed without checking the key or the
+            # returned type, so a gaussian-only response raised KeyError.
+            raw = _first_of(outputs.get("mesh"), "mesh")
+            if raw is None:
+                raise TrellisOutputError(
+                    f"TRELLIS returned no 'mesh' entry (keys: {sorted(outputs)})"
+                )
             verts_raw = raw.vertices.detach().cpu().numpy().astype(np.float32)
             faces = raw.faces.detach().cpu().numpy().astype(np.int32)
 
