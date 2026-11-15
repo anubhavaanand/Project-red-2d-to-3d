@@ -50,6 +50,31 @@ def _first_of(value, label: str):
     return value
 
 
+def _normalize_vertex_colors(raw) -> tuple[np.ndarray | None, str]:
+    """Return float RGB in [0, 1] plus a note describing the source range.
+
+    ENG-23: TRELLIS vertex_attrs were clipped to [0, 1] without checking the
+    decoder's actual range. A 0..255 decoder therefore produced an all-black
+    mesh (everything clipped to 1 after scaling was skipped) or a saturated
+    one. Detect the range from the data and scale accordingly.
+    """
+    if raw is None:
+        return None, "absent"
+
+    arr = np.asarray(raw, dtype=np.float32)
+    if arr.ndim == 1:
+        arr = arr.reshape(1, -1)
+    rgb = arr[:, :3]
+    if rgb.shape[1] == 0:
+        return None, "empty"
+
+    peak = float(np.nanmax(rgb)) if rgb.size else 0.0
+    if peak > 1.5:
+        # 0..255 (or similar) — scale into [0, 1]
+        return np.clip(rgb / 255.0, 0.0, 1.0), f"0..255 (peak {peak:.1f})"
+    return np.clip(rgb, 0.0, 1.0), f"0..1 (peak {peak:.3f})"
+
+
 class TrellisEngine(AbstractEngine):
     def __init__(
         self,
@@ -241,11 +266,12 @@ class TrellisEngine(AbstractEngine):
             attrs = getattr(raw, "vertex_attrs", None)
             if attrs is not None:
                 try:
-                    vcols = np.clip(
-                        attrs.detach().cpu().numpy().astype(np.float32)[:, :3],
-                        0.0,
-                        1.0,
+                    # ENG-23: detect the decoder's colour range instead of
+                    # assuming [0, 1], and record what was found.
+                    vcols, color_range = _normalize_vertex_colors(
+                        attrs.detach().cpu().numpy()
                     )
+                    metadata["vertex_color_range"] = color_range
                 except Exception as ce:
                     print(f"[TRELLIS] vertex color warning: {ce}")
 
