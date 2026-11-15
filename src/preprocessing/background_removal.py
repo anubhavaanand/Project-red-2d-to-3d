@@ -5,10 +5,15 @@ import rembg
 from PIL import Image
 from scipy.ndimage import label
 
+from ..model_weights import asset, ensure
+
 
 class BackgroundRemover:
     def __init__(self, model_name: str = "isnet-general-use"):
         self.model_name = model_name
+        # SEC-12: verify the segmentation weights against a pinned SHA-256 before
+        # handing them to rembg, so a substituted CDN cannot silently change masks.
+        ensure(asset(f"{model_name}.onnx"))
         self.session = rembg.new_session(self.model_name)
 
     def remove(self, image: Image.Image) -> Image.Image:

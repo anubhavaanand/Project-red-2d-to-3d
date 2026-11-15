@@ -1,6 +1,8 @@
+import lpips
 import numpy as np
 import torch
-import lpips
+
+from ..model_weights import asset, ensure
 
 _lpips_vgg = None
 
@@ -32,6 +34,9 @@ def compute_lpips(img1, img2) -> float:
     """Computes VGG LPIPS perceptual distance between two RGB images."""
     global _lpips_vgg
     if _lpips_vgg is None:
+        # SEC-12: verify the VGG16 weights against a pinned SHA-256 before lpips
+        # loads them, so a substituted CDN cannot silently change the metric.
+        ensure(asset("vgg16-397923af.pth"))
         _lpips_vgg = lpips.LPIPS(net="vgg").eval()
     t1 = _to_lpips_tensor(img1)
     t2 = _to_lpips_tensor(img2)
