@@ -583,6 +583,9 @@ def render_novel_view_same_bg(
         )
         if use_native_uv:
             color = _srgb_encode_u8(color)
+        else:
+            # Also apply sRGB encoding for vertex-color path to match transfer function
+            color = _srgb_encode_u8(color)
         return color
     except Exception as e:
         print(f"[Renderer] pyrender failed ({e}). Skipping 2D perceptual metrics.")
