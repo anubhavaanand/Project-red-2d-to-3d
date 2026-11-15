@@ -144,16 +144,20 @@ def spar3d_compat_shims() -> Iterator[None]:
                     )
                     new_size = list(layer.weight.size())
                     new_size[dim] = len(index)
-                    new_layer = torch.nn.Linear(
-                        new_size[1], new_size[0], bias=layer.bias is not None
-                    ).to(layer.weight.device)
-                    new_layer.weight.requires_grad = False
-                    new_layer.weight.copy_(weight.contiguous())
-                    new_layer.weight.requires_grad = True
+                    # ENG-30: build the new layer under no_grad and preserve the
+                    # source's requires_grad, instead of toggling it off/on (which
+                    # left the copy in autograd state and changed training
+                    # semantics for any model loaded after the shim).
+                    with torch.no_grad():
+                        new_layer = torch.nn.Linear(
+                            new_size[1], new_size[0], bias=layer.bias is not None
+                        ).to(layer.weight.device)
+                        new_layer.weight.copy_(weight.contiguous())
+                        if layer.bias is not None:
+                            new_layer.bias.copy_(bias.contiguous())
+                    new_layer.weight.requires_grad = layer.weight.requires_grad
                     if layer.bias is not None:
-                        new_layer.bias.requires_grad = False
-                        new_layer.bias.copy_(bias.contiguous())
-                        new_layer.bias.requires_grad = True
+                        new_layer.bias.requires_grad = layer.bias.requires_grad
                     return new_layer
 
                 _patch(tpu, "prune_linear_layer", _prune_linear_layer)
