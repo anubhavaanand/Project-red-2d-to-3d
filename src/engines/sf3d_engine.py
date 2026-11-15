@@ -90,7 +90,15 @@ class SF3DEngine(AbstractEngine):
         rgba = image.convert("RGBA")
 
         t0 = time.perf_counter()
-        with torch.cuda.device(self.device):
+        # ENG-41: torch.cuda.device("cpu") raises. Only enter the CUDA context
+        # when the engine actually targets a CUDA device.
+        if str(self.device).startswith("cuda"):
+            with torch.cuda.device(self.device):
+                mesh_out, glob_dict = self.model.run_image(
+                    rgba,
+                    bake_resolution=self.texture_resolution,
+                )
+        else:
             mesh_out, glob_dict = self.model.run_image(
                 rgba,
                 bake_resolution=self.texture_resolution,
