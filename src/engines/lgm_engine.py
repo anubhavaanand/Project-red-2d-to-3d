@@ -126,10 +126,21 @@ class LGMEngine(AbstractEngine):
         self.model = self.model.half().to(self.device).eval()
 
         print("[LGM] Loading ImageDream multi-view diffusion …")
+        
+        # SECURITY: trust_remote_code executes arbitrary model code from HF.
+        # Only allow if explicitly enabled via env var, and log a warning.
+        import os as _os
+        _allow_remote_code = _os.environ.get("LGM_ALLOW_REMOTE_CODE", "0") == "1"
+        if _allow_remote_code:
+            print("[LGM] WARNING: Loading ImageDream with trust_remote_code=True (executing model code from HF)")
+        else:
+            print("[LGM] Loading ImageDream with trust_remote_code=False (safe mode)")
+            print("[LGM] Set LGM_ALLOW_REMOTE_CODE=1 to enable remote code execution")
+        
         self.mv_pipeline = MVDreamPipeline.from_pretrained(
             "ashawkey/imagedream-ipmv-diffusers",
             torch_dtype=torch.float16,
-            trust_remote_code=True,
+            trust_remote_code=_allow_remote_code,
         ).to(self.device)
         self.mv_pipeline.scheduler = DDIMScheduler.from_config(
             self.mv_pipeline.scheduler.config
