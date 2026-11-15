@@ -81,6 +81,48 @@ def _ensure_outward_normals(tm) -> str:
     return "already outward"
 
 
+def _vertex_colors_from_to_color(vis, n_verts: int) -> np.ndarray | None:
+    """Read vertex colours via ``vis.to_color()``, tolerating its absence.
+
+    ENG-34: ``vis.to_color()`` may not exist on every mesh type. Probe for it and
+    skip (returning None) rather than letting the AttributeError propagate to the
+    outer handler and silently discard the colours.
+    """
+    to_color = getattr(vis, "to_color", None)
+    if not callable(to_color):
+        print("[SPAR3D] vertex colors: visual has no to_color(); skipping")
+        return None
+
+    vc_vis = to_color()
+    if getattr(vc_vis, "vertex_colors", None) is None:
+        return None
+
+    vc = np.asarray(vc_vis.vertex_colors, dtype=np.float32)
+    if len(vc) != n_verts:
+        return None
+    return vc[:, :3] / (255.0 if vc.max() > 1.05 else 1.0)
+
+
+def _apply_foreground_crop(engine, image):
+    """Crop to the foreground, returning ``(image, error_or_None)``.
+
+    ENG-32: a failed crop was printed and ignored, so an uncropped image
+    silently degraded results with no structured signal for the caller. Returns
+    the error string so it can be recorded in metadata.
+    """
+    try:
+        return (
+            engine._foreground_crop(
+                image, crop_ratio=engine.foreground_ratio, newsize=(512, 512)
+            ),
+            None,
+        )
+    except Exception as crop_err:
+        error = f"{type(crop_err).__name__}: {crop_err}"
+        print(f"[SPAR3D] foreground_crop failed, using uncropped input ({error})")
+        return image, error
+
+
 class Spar3dEngine(AbstractEngine):
     def __init__(
         self,
@@ -213,16 +255,7 @@ class Spar3dEngine(AbstractEngine):
                 ).astype(np.float32)
             else:
                 # ENG-34: vis.to_color() may not exist on this mesh type.
-                # Probe for it and log rather than raising into the outer handler.
-                to_color = getattr(vis, "to_color", None)
-                if not callable(to_color):
-                    print("[SPAR3D] vertex colors: visual has no to_color(); skipping")
-                else:
-                    vc_vis = to_color()
-                    if getattr(vc_vis, "vertex_colors", None) is not None:
-                        vc = np.asarray(vc_vis.vertex_colors, dtype=np.float32)
-                        if len(vc) == len(verts):
-                            vcols = vc[:, :3] / (255.0 if vc.max() > 1.05 else 1.0)
+                vcols = _vertex_colors_from_to_color(vis, len(verts))
 
             if vcols is not None and len(vcols) == len(verts):
                 # Repair unbaked black UV chart padding texels (brightness < 0.04) via 3D k-NN
@@ -258,14 +291,7 @@ class Spar3dEngine(AbstractEngine):
 
         # ENG-32: a failed crop was printed and ignored, so an uncropped image
         # silently degraded results with no structured signal. Record it.
-        crop_error = None
-        try:
-            rgba = self._foreground_crop(
-                rgba, crop_ratio=self.foreground_ratio, newsize=(512, 512)
-            )
-        except Exception as crop_err:
-            crop_error = f"{type(crop_err).__name__}: {crop_err}"
-            print(f"[SPAR3D] foreground_crop failed, using uncropped input ({crop_error})")
+        rgba, crop_error = _apply_foreground_crop(self, rgba)
 
         torch.manual_seed(42)
         np.random.seed(42)
