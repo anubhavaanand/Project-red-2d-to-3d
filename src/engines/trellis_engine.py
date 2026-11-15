@@ -324,6 +324,8 @@ class TrellisEngine(AbstractEngine):
             verts = verts_raw @ rx_neg90.T
 
             mesh = Mesh3D(vertices=verts, faces=faces, vertex_colors=vcols)
+            # ENG-42: validate at the source rather than in export/rendering.
+            mesh.validate()
             metadata.update({
                 "vertex_count": len(mesh.vertices),
                 "face_count": len(mesh.faces),
@@ -342,6 +344,8 @@ class TrellisEngine(AbstractEngine):
             sh_coeffs=gs.get_features[:, 0, :3].detach().cpu().numpy().astype(np.float32),
         )
         metadata.update({"gaussian_count": len(gaussians.positions)})
+        # ENG-42: validate at the source rather than in export/rendering.
+        gaussians.validate()
         free_cuda_cache()
         gc.collect()
         return ReconstructionResult(gaussians=gaussians, metadata=metadata)

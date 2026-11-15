@@ -240,6 +240,8 @@ class LGMEngine(AbstractEngine):
             opacities=opa,
             sh_coeffs=rgb,
         )
+        # ENG-42: validate at the source rather than in export/rendering.
+        gaussians_out.validate()
 
         # ENG-20: mesh extraction failure is recorded, not swallowed. The
         # Gaussians are still returned so the caller can fall back to them.

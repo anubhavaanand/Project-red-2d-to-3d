@@ -142,6 +142,8 @@ class SF3DEngine(AbstractEngine):
             uv_coords=uv_coords,
             texture_map=texture_map,
         )
+        # ENG-42: validate at the source rather than in export/rendering.
+        mesh.validate()
         metadata: Dict[str, Any] = {
             "engine": "SF3D",
             "latency_s": round(latency, 3),
