@@ -17,6 +17,7 @@ from scipy.spatial import cKDTree
 from .base import AbstractEngine, ReconstructionResult, Mesh3D
 from ._compat import spar3d_compat_shims
 from ._paths import extend_sys_path
+from ._memory import free_cuda_cache
 
 
 class Spar3dEngine(AbstractEngine):
@@ -241,7 +242,7 @@ class Spar3dEngine(AbstractEngine):
             uv_coords=uv_coords,
             texture_map=tex_map,
         )
-        torch.cuda.empty_cache()
+        free_cuda_cache()
 
         return ReconstructionResult(
             mesh=mesh,

@@ -27,6 +27,7 @@ from PIL import Image
 
 from .base import AbstractEngine, ReconstructionResult, Mesh3D
 from ._paths import extend_sys_path
+from ._memory import free_cuda_cache
 
 
 class SF3DEngine(AbstractEngine):
@@ -112,7 +113,7 @@ class SF3DEngine(AbstractEngine):
             "texture_resolution": self.texture_resolution,
             "note": "DMTet extraction + UV unwrap (vs TripoSR Marching Cubes)",
         }
-        torch.cuda.empty_cache()
+        free_cuda_cache()
         return ReconstructionResult(mesh=mesh, metadata=metadata)
 
     def get_engine_info(self) -> Dict[str, Any]:

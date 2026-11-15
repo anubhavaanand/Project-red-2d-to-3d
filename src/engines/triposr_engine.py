@@ -14,6 +14,7 @@ from PIL import Image
 
 from .base import AbstractEngine, ReconstructionResult, Mesh3D
 from ._paths import extend_sys_path
+from ._memory import free_cuda_cache
 
 
 def _skimage_mc_func(level, iso=0.0):
@@ -274,7 +275,7 @@ class TriposrEngine(AbstractEngine):
             faces=np.asarray(mesh_obj.faces, dtype=np.int64),
             vertex_colors=vertex_colors,
         )
-        torch.cuda.empty_cache()
+        free_cuda_cache()
 
         return ReconstructionResult(
             mesh=result_mesh,

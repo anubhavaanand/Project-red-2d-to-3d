@@ -27,6 +27,7 @@ from huggingface_hub import hf_hub_download
 from .base import AbstractEngine, ReconstructionResult, Mesh3D, GaussianCloud
 from ._compat import lgm_xformers_shim
 from ._paths import extend_sys_path
+from ._memory import free_cuda_cache
 
 LGM_NEGATIVE_PROMPT = (
     "ugly, blurry, pixelated obscure, unnatural colors, poor lighting, "
@@ -231,7 +232,7 @@ class LGMEngine(AbstractEngine):
             mesh_out = None
 
         latency = time.perf_counter() - t0
-        torch.cuda.empty_cache()
+        free_cuda_cache()
 
         return ReconstructionResult(
             gaussians=gaussians_out,
