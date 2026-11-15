@@ -17,7 +17,6 @@ Requires (install order matters, same JIT-build family as spconv):
 
 from __future__ import annotations
 
-import sys
 import time
 from pathlib import Path
 from typing import Dict, Any
@@ -27,6 +26,7 @@ import torch
 from PIL import Image
 
 from .base import AbstractEngine, ReconstructionResult, Mesh3D
+from ._paths import extend_sys_path
 
 
 class SF3DEngine(AbstractEngine):
@@ -56,8 +56,9 @@ class SF3DEngine(AbstractEngine):
     def load_model(self) -> None:
         try:
             self._sf3d_dir = self._locate_repo()
-            if str(self._sf3d_dir) not in sys.path:
-                sys.path.insert(0, str(self._sf3d_dir))
+            # SEC-16: append (never prepend) so a planted module in a
+            # world-writable clone dir cannot shadow a real dependency.
+            extend_sys_path(self._sf3d_dir)
             from sf3d.system import SF3D  # official loader
 
             self.model = SF3D.from_pretrained(

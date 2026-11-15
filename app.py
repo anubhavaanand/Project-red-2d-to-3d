@@ -51,8 +51,11 @@ import gradio as gr
 import numpy as np
 from PIL import Image
 
-# Add project src to path when running standalone
-sys.path.insert(0, str(Path(__file__).parent))
+# Add project src to path when running standalone.
+# SEC-16: append, never prepend — a leading entry would let a same-named module
+# in this directory shadow an installed dependency.
+if str(Path(__file__).parent) not in sys.path:
+    sys.path.append(str(Path(__file__).parent))
 from src.preprocessing.background_removal import BackgroundRemover
 from src.engines.triposr_engine import TriposrEngine
 from src.engines.trellis_engine import TrellisEngine

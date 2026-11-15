@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import gc
 import os
-import sys
 import time
 from pathlib import Path
 from typing import Dict, Any, Literal
@@ -25,6 +24,7 @@ import torch
 from PIL import Image
 
 from .base import AbstractEngine, ReconstructionResult, Mesh3D, GaussianCloud
+from ._paths import extend_sys_path
 
 os.environ.setdefault("SPCONV_ALGO", "native")
 os.environ.setdefault("ATTN_BACKEND", "xformers")
@@ -59,15 +59,20 @@ class TrellisEngine(AbstractEngine):
         try:
             import trellis  # noqa: F401
         except ImportError:
-            for c in [
-                Path("/tmp/TRELLIS"),
-                Path("/kaggle/working/TRELLIS"),
-                Path(__file__).resolve().parents[2] / "TRELLIS",
-                Path(__file__).resolve().parents[3] / "TRELLIS",
-            ]:
-                if (c / "trellis").is_dir() and str(c) not in sys.path:
-                    sys.path.insert(0, str(c))
-                    break
+            # SEC-16: append (never prepend) so a planted module in a
+            # world-writable clone dir cannot shadow a real dependency.
+            extend_sys_path(
+                *[
+                    c
+                    for c in [
+                        Path("/tmp/TRELLIS"),
+                        Path("/kaggle/working/TRELLIS"),
+                        Path(__file__).resolve().parents[2] / "TRELLIS",
+                        Path(__file__).resolve().parents[3] / "TRELLIS",
+                    ]
+                    if (c / "trellis").is_dir()
+                ]
+            )
 
     def attach(self, pipeline, dev=None) -> None:
         self.pipeline = pipeline

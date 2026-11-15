@@ -16,6 +16,7 @@ from scipy.spatial import cKDTree
 
 from .base import AbstractEngine, ReconstructionResult, Mesh3D
 from ._compat import spar3d_compat_shims
+from ._paths import extend_sys_path
 
 
 class Spar3dEngine(AbstractEngine):
@@ -51,9 +52,21 @@ class Spar3dEngine(AbstractEngine):
         # SEC-15: shims are scoped to this block and undone on exit.
         with spar3d_compat_shims():
             repo_dir = self._locate_repo()
-            for p in [repo_dir, Path("/tmp/CLIP"), Path("/tmp/AlphaCLIP"), Path("/kaggle/working/CLIP"), Path("/kaggle/working/AlphaCLIP")]:
-                if p.is_dir() and str(p) not in sys.path:
-                    sys.path.insert(0, str(p))
+            # SEC-16: append (never prepend) so a planted module in a
+            # world-writable clone dir cannot shadow a real dependency.
+            extend_sys_path(
+                *[
+                    p
+                    for p in [
+                        repo_dir,
+                        Path("/tmp/CLIP"),
+                        Path("/tmp/AlphaCLIP"),
+                        Path("/kaggle/working/CLIP"),
+                        Path("/kaggle/working/AlphaCLIP"),
+                    ]
+                    if p.is_dir()
+                ]
+            )
 
             from spar3d.system import SPAR3D
             from spar3d.utils import foreground_crop
