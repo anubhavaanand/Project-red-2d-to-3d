@@ -135,6 +135,15 @@ class LGMEngine(AbstractEngine):
         )
         ckpt = load_file(ckpt_path, device="cpu")
         model_sd = self.model.state_dict()
+        
+        # Warn about dropped keys
+        dropped_keys = [k for k in ckpt.keys() if k not in model_sd]
+        mismatched_shapes = [k for k in ckpt.keys() if k in model_sd and model_sd[k].shape != ckpt[k].shape]
+        if dropped_keys:
+            print(f"[LGM] WARNING: Dropping {len(dropped_keys)} checkpoint keys not in model: {dropped_keys[:5]}...")
+        if mismatched_shapes:
+            print(f"[LGM] WARNING: Dropping {len(mismatched_shapes)} checkpoint keys with shape mismatch: {mismatched_shapes[:5]}...")
+        
         filtered = {
             k: v for k, v in ckpt.items()
             if k in model_sd and model_sd[k].shape == v.shape
