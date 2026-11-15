@@ -117,7 +117,14 @@ class TrellisEngine(AbstractEngine):
                 ]
             )
 
-    def attach(self, pipeline, dev=None) -> None:
+    def set_pipeline(self, pipeline, dev: str | None = None) -> None:
+        """Attach an already-loaded pipeline, skipping ``load_model()``.
+
+        ENG-28: replaced the untyped, uncalled ``attach()``. Useful for tests
+        and for sharing one pipeline across engine instances.
+        """
+        if pipeline is None:
+            raise ValueError("pipeline must not be None")
         self.pipeline = pipeline
         if dev is not None:
             self.dev = torch.device(dev)
