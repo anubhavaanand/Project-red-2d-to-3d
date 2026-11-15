@@ -1,53 +1,133 @@
-"""Tests for SPAR3D's optional vis.to_color() path (ENG-34)."""
+"""Behavioural tests for SPAR3D's optional vis.to_color() path (ENG-34)."""
 
-import ast
-from pathlib import Path
+import sys
+import types
 
+import numpy as np
 import pytest
 
-ENGINE = Path(__file__).parent.parent / "src" / "engines" / "spar3d_engine.py"
+
+@pytest.fixture(scope="module")
+def spar3d():
+    """Import spar3d_engine with a minimal torch stub."""
+    t = types.ModuleType("torch")
+    t.__version__ = "0.0-stub"
+    t.float32, t.int64 = "float32", "int64"
+    t.device = lambda x: x
+    t.cuda = types.SimpleNamespace(is_available=lambda: False, empty_cache=lambda: None)
+
+    class _NoCtx:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def __call__(self, fn):
+            # supports use as a decorator: @torch.no_grad()
+            return fn
+
+    t.no_grad = lambda: _NoCtx()
+    t.nn = types.ModuleType("torch.nn")
+    t.nn.functional = types.ModuleType("torch.nn.functional")
+    sys.modules["torch"] = t
+    sys.modules["torch.nn"] = t.nn
+    sys.modules["torch.nn.functional"] = t.nn.functional
+
+    from src.engines import spar3d_engine
+
+    return spar3d_engine
 
 
-class TestSourceContract:
-    def test_to_color_is_probed_with_getattr(self):
-        """ENG-34: vis.to_color() must not be called blind."""
-        src = ENGINE.read_text()
-        assert 'getattr(vis, "to_color", None)' in src
+class _Vis:
+    """Stand-in for a trimesh visual object."""
 
-    def test_result_is_checked_for_callability(self):
-        src = ENGINE.read_text()
-        assert "if not callable(to_color):" in src
+    def __init__(self, vertex_colors=None, with_to_color=True):
+        self._vc = vertex_colors
+        if with_to_color:
+            self.to_color = self._to_color
 
-    def test_missing_method_is_logged(self):
-        src = ENGINE.read_text()
-        assert "has no to_color(); skipping" in src
+    def _to_color(self):
+        return types.SimpleNamespace(vertex_colors=self._vc)
 
-    def test_no_bare_vis_to_color_call(self):
-        """A direct vis.to_color() call must be gone from real code."""
-        tree = ast.parse(ENGINE.read_text())
+
+class TestToColorPresent:
+    def test_reads_vertex_colors(self, spar3d):
+        vc = np.array([[1.0, 0.0, 0.0]] * 4, dtype=np.float32)
+        out = spar3d._vertex_colors_from_to_color(_Vis(vc), 4)
+        assert out is not None
+        assert out.shape == (4, 3)
+
+    def test_uint8_range_is_scaled(self, spar3d):
+        vc = np.full((4, 3), 255, dtype=np.uint8)
+        out = spar3d._vertex_colors_from_to_color(_Vis(vc), 4)
+        assert out.max() == pytest.approx(1.0)
+
+    def test_float_range_is_not_scaled(self, spar3d):
+        vc = np.full((4, 3), 0.5, dtype=np.float32)
+        out = spar3d._vertex_colors_from_to_color(_Vis(vc), 4)
+        assert out.max() == pytest.approx(0.5)
+
+    def test_rgba_is_truncated_to_rgb(self, spar3d):
+        vc = np.zeros((4, 4), dtype=np.float32)
+        out = spar3d._vertex_colors_from_to_color(_Vis(vc), 4)
+        assert out.shape == (4, 3)
+
+
+class TestToColorAbsent:
+    def test_missing_method_returns_none(self, spar3d):
+        """ENG-34: no to_color must not raise."""
+        assert spar3d._vertex_colors_from_to_color(_Vis(with_to_color=False), 4) is None
+
+    def test_object_without_the_attribute_returns_none(self, spar3d):
+        assert spar3d._vertex_colors_from_to_color(object(), 4) is None
+
+    def test_none_visual_returns_none(self, spar3d):
+        assert spar3d._vertex_colors_from_to_color(None, 4) is None
+
+
+class TestMalformedResults:
+    def test_no_vertex_colors_attribute_returns_none(self, spar3d):
+        vis = types.SimpleNamespace(to_color=lambda: types.SimpleNamespace())
+        assert spar3d._vertex_colors_from_to_color(vis, 4) is None
+
+    def test_length_mismatch_returns_none(self, spar3d):
+        vc = np.zeros((3, 3), dtype=np.float32)
+        assert spar3d._vertex_colors_from_to_color(_Vis(vc), 4) is None
+
+    def test_matching_length_succeeds(self, spar3d):
+        vc = np.zeros((4, 3), dtype=np.float32)
+        assert spar3d._vertex_colors_from_to_color(_Vis(vc), 4) is not None
+
+
+class TestNonCallableAttribute:
+    def test_non_callable_to_color_is_treated_as_absent(self, spar3d):
+        """A property that isn't callable must not be invoked."""
+        vis = types.SimpleNamespace(to_color="not callable")
+        assert spar3d._vertex_colors_from_to_color(vis, 4) is None
+
+
+class TestWiring:
+    def test_helper_exists_and_is_used(self, spar3d):
+        import inspect
+
+        src = inspect.getsource(spar3d.Spar3dEngine._extract_spar3d_vertex_colors)
+        assert "_vertex_colors_from_to_color(vis, len(verts))" in src
+
+    def test_no_bare_to_color_call_left(self, spar3d):
+        """The blind vis.to_color() call must be gone from the engine method."""
+        import ast
+        import inspect
+        import textwrap
+
+        src = textwrap.dedent(
+            inspect.getsource(spar3d.Spar3dEngine._extract_spar3d_vertex_colors)
+        )
+        tree = ast.parse(src)
         for node in ast.walk(tree):
             if isinstance(node, ast.Call) and getattr(node.func, "attr", "") == "to_color":
                 if not isinstance(node.func.value, ast.Name):
                     pytest.fail(
-                        f"bare vis.to_color() at line {node.lineno} "
-                        "(should be via the probed callable)"
+                        f"bare vis.to_color() at line {node.lineno} — "
+                        "should go through _vertex_colors_from_to_color"
                     )
-
-    def test_engine_parses(self):
-        ast.parse(ENGINE.read_text())
-
-
-class TestProbeSemantics:
-    def test_getattr_probe_pattern(self):
-        class Without:
-            pass
-
-        class With:
-            def to_color(self):
-                return "ok"
-
-        assert getattr(Without(), "to_color", None) is None
-        assert callable(getattr(With(), "to_color", None))
-        assert not callable(getattr(Without(), "to_color", None))
-
-
