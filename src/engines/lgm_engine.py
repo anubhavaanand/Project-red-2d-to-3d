@@ -22,7 +22,7 @@ import torch
 from PIL import Image
 
 from ._compat import lgm_xformers_shim
-from ._mask import derive_foreground_mask
+from ._mask import FILTER_SPECKLE, derive_foreground_mask
 from ._memory import free_cuda_cache
 from ._paths import extend_sys_path
 from .base import AbstractEngine, GaussianCloud, Mesh3D, ReconstructionResult
@@ -220,7 +220,7 @@ class LGMEngine(AbstractEngine):
         # treating every pixel below 248 as foreground (JPEG noise became mask).
         mask = image_np[..., -1] > 10
         if mask.mean() > 0.98:
-            fg = derive_foreground_mask(image_np)
+            fg = derive_foreground_mask(image_np, filter_speckle=FILTER_SPECKLE)
             if fg.any():
                 mask = fg
 

@@ -14,6 +14,8 @@ This module provides one thresholded, speckle-filtered implementation.
 
 from __future__ import annotations
 
+import os
+
 import numpy as np
 
 # Alpha at or above this is treated as "fully opaque" — i.e. no usable alpha.
@@ -28,20 +30,33 @@ MIN_COMPONENT_PX = 64
 # keeps genuinely separate parts (a mug and its handle) while dropping noise.
 MIN_COMPONENT_FRACTION = 0.01
 
+# ENG-05 / benchmark freeze: the published v1.0 numbers were produced WITHOUT
+# speckle filtering, so the default here is legacy behaviour. Opt in with
+# IMAGE_TO_3D_FILTER_SPECKLE=1 to enable the improved masks (which differ on
+# noisy images). Keeping one flag means a benchmark run flips both the ENG-05
+# mask behaviour and nothing else.
+FILTER_SPECKLE = os.environ.get("IMAGE_TO_3D_FILTER_SPECKLE", "0") == "1"
+
 
 def alpha_is_usable(arr: np.ndarray) -> bool:
     """True when the alpha channel carries real transparency information."""
     return np.asarray(arr)[..., 3].min() < ALPHA_OPAQUE
 
 
-def derive_foreground_mask(rgb: np.ndarray) -> np.ndarray:
+def derive_foreground_mask(rgb: np.ndarray, filter_speckle: bool = True) -> np.ndarray:
     """Return a boolean foreground mask for a white-background image.
 
-    Pixels are foreground when they are not near-white, then small connected
-    components are dropped so JPEG speckle does not become a mask.
+    Pixels are foreground when they are not near-white.
+
+    ``filter_speckle`` (default ``True``) additionally drops small connected
+    components so JPEG noise does not become a mask. Pass ``False`` to reproduce
+    the legacy v1.0 behaviour bit-for-bit, which is what the published benchmark
+    used.
     """
     rgb = np.asarray(rgb)[..., :3]
     mask = np.any(rgb < WHITE_BACKGROUND_LEVEL, axis=-1)
+    if not filter_speckle:
+        return mask
     return _drop_speckle(mask)
 
 
