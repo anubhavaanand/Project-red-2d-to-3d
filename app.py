@@ -105,6 +105,38 @@ def _get_engine(name: str):
 # Core inference function
 # ---------------------------------------------------------------------------
 
+# SEC-22: upload limits. Gradio hands us an already-decoded PIL image, so the
+# only defence left is to bound what we accept before it reaches a model.
+MAX_IMAGE_PIXELS = 4096 * 4096  # ~16.7 MP; 4096x4096 RGBA decodes to ~67 MB
+ALLOWED_IMAGE_MODES = {"RGB", "RGBA", "L", "LA", "P"}
+
+
+def validate_upload(image: Image.Image | None) -> str | None:
+    """Return an error message if ``image`` is unacceptable, else ``None``.
+
+    Kept separate from :func:`generate_3d` so the limits can be exercised
+    without importing the Gradio UI.
+    """
+    if image is None:
+        return "⚠️ Please upload an image first."
+
+    # SEC-22: reject unsupported modes rather than letting an exotic format
+    # (CMYK, 16-bit, palette oddities) reach the engines.
+    if image.mode not in ALLOWED_IMAGE_MODES:
+        return f"❌ Unsupported image mode '{image.mode}'. Use RGB or RGBA."
+
+    # SECURITY: bound width/height (decompression bombs)
+    if image.width > 4096 or image.height > 4096:
+        return "❌ Image too large (max 4096x4096)"
+
+    # SEC-22: cap total pixel count too. A 4096x4096 RGBA upload decodes to
+    # ~67 MB in memory before any processing starts.
+    if image.width * image.height > MAX_IMAGE_PIXELS:
+        return "❌ Image has too many pixels (max 16.7 MP)"
+
+    return None
+
+
 def generate_3d(
     image: Image.Image,
     engine_name: str,
@@ -115,12 +147,9 @@ def generate_3d(
     -------
     (glb_path_or_none, status_message, preview_image_or_none)
     """
-    if image is None:
-        return None, "⚠️ Please upload an image first.", None
-
-    # SECURITY: Validate image dimensions to prevent decompression bombs
-    if image.width > 4096 or image.height > 4096:
-        return None, "❌ Image too large (max 4096x4096)", None
+    error = validate_upload(image)
+    if error is not None:
+        return None, error, None
 
     try:
         t0 = time.time()
@@ -344,7 +373,3 @@ if __name__ == "__main__":
         auth=auth,           # SECURITY FIX: require auth if credentials provided
         show_error=False,    # SECURITY FIX: never expose tracebacks to users
     )
-
-
-# Paper
-Benchmarking Feed-Forward Single-Image 3D Reconstruction Across Triplane, Gaussian, Point-Aware, and Structured Latent Paradigms
