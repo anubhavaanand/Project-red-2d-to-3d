@@ -165,6 +165,73 @@ class TestBenchmarkRunner:
 
 
 # =============================================================================
+# BENCHMARK REGRESSION TESTS (CI-04)
+# =============================================================================
+
+class TestBenchmarkRegression:
+    """Regression tests to ensure benchmark produces consistent results."""
+
+    def test_benchmark_runner_returns_dataframe(self):
+        """BenchmarkRunner.get_summary_df should return a DataFrame."""
+        import pandas as pd
+        from src.evaluation.benchmark_runner import BenchmarkRunner
+        runner = BenchmarkRunner(
+            dataset_path="/tmp/fake",
+            engines=[],
+            num_samples=10,
+            output_dir="/tmp/test_outputs",
+        )
+        df = runner.get_summary_df()
+        assert isinstance(df, pd.DataFrame)
+
+    def test_benchmark_runner_empty_results(self):
+        """Runner with no results should return empty DataFrame."""
+        from src.evaluation.benchmark_runner import BenchmarkRunner
+        runner = BenchmarkRunner(
+            dataset_path="/tmp/fake",
+            engines=[],
+            num_samples=10,
+            output_dir="/tmp/test_outputs",
+        )
+        df = runner.get_summary_df()
+        assert df.empty
+
+    def test_benchmark_runner_export_latex(self):
+        """export_latex_table should return a string with table markup."""
+        from src.evaluation.benchmark_runner import BenchmarkRunner
+        runner = BenchmarkRunner(
+            dataset_path="/tmp/fake",
+            engines=[],
+            num_samples=10,
+            output_dir="/tmp/test_outputs",
+        )
+        latex = runner.export_latex_table()
+        assert isinstance(latex, str)
+        assert "tabular" in latex
+
+    def test_benchmark_runner_save_results(self):
+        """save_results should write a JSON file."""
+        import json
+        import tempfile
+        from src.evaluation.benchmark_runner import BenchmarkRunner
+        runner = BenchmarkRunner(
+            dataset_path="/tmp/fake",
+            engines=[],
+            num_samples=10,
+            output_dir="/tmp/test_outputs",
+        )
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
+            path = f.name
+        try:
+            runner.save_results(path)
+            with open(path) as f:
+                data = json.load(f)
+            assert isinstance(data, list)
+        finally:
+            os.unlink(path)
+
+
+# =============================================================================
 # DATA CONTRACT TESTS (DATA-10)
 # =============================================================================
 
