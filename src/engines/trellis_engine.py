@@ -92,9 +92,14 @@ class TrellisEngine(AbstractEngine):
         self.output_format = output_format
         self.slat_steps = slat_steps
         self.sparse_steps = sparse_steps
-        self.sparse_cfg_strength = float(cfg_strength) if cfg_strength is not None else float(sparse_cfg_strength)
+        # ENG-26: cfg_strength used to be stored as self.cfg_strength and then
+        # never read, so callers thought they were changing CFG. It is now an
+        # explicit alias for sparse_cfg_strength only; slat_cfg_strength is
+        # configured separately because the two samplers use different scales.
+        if cfg_strength is not None:
+            sparse_cfg_strength = cfg_strength
+        self.sparse_cfg_strength = float(sparse_cfg_strength)
         self.slat_cfg_strength = float(slat_cfg_strength)
-        self.cfg_strength = self.sparse_cfg_strength
         self.staged_offload = staged_offload
         self.pipeline = None
 
