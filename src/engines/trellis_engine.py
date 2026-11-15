@@ -284,6 +284,16 @@ class TrellisEngine(AbstractEngine):
         gc.collect()
         return ReconstructionResult(gaussians=gaussians, metadata=metadata)
 
+    def unload_model(self) -> None:
+        """ENG-09: TRELLIS keeps staged CPU/GPU offload state; drop it all."""
+        import gc
+
+        super().unload_model()
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.ipc_collect()
+
     def get_engine_info(self) -> Dict[str, Any]:
         return {
             "name": "TRELLIS",

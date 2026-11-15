@@ -39,3 +39,21 @@ class AbstractEngine(ABC):
     @abstractmethod
     def get_engine_info(self) -> Dict[str, Any]:
         pass
+
+    def unload_model(self) -> None:
+        """Release the model and any GPU memory it holds.
+
+        ENG-09: BenchmarkRunner calls this between engines when present, but
+        engines did not implement it, so models stayed resident in VRAM/RAM
+        and long runs OOMed. Subclasses with heavier state should override,
+        free CUDA explicitly, then call ``super().unload_model()``.
+        """
+        for name in list(vars(self)):
+            # Keep the scalar configuration; drop anything holding model state.
+            if name in ("device", "dev", "output_format", "chunk_size", "resolution",
+                        "texture_resolution", "low_vram_mode", "foreground_ratio",
+                        "mv_guidance_scale", "mv_num_inference_steps", "elevation",
+                        "slat_steps", "sparse_steps", "sparse_cfg_strength",
+                        "slat_cfg_strength", "cfg_strength", "staged_offload"):
+                continue
+            setattr(self, name, None)

@@ -356,6 +356,16 @@ class LGMEngine(AbstractEngine):
             print(f"[LGM] Mesh extraction error: {e}")
             return None
 
+    def unload_model(self) -> None:
+        """ENG-09: drop the pipelines and free cached CUDA blocks."""
+        import gc
+
+        super().unload_model()
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.ipc_collect()
+
     def get_engine_info(self) -> Dict[str, Any]:
         return {
             "name": "LGM",
