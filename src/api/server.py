@@ -124,7 +124,9 @@ async def predict(
         if image.width > 4096 or image.height > 4096:
             raise HTTPException(status_code=413, detail="Image dimensions too large (max 4096x4096)")
         
-        image = image.convert("RGB")
+        # Keep RGBA to preserve alpha channel for foreground cropping
+        if image.mode != "RGBA":
+            image = image.convert("RGBA")
 
         result = engine.predict(image)
 
