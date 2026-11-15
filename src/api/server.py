@@ -14,6 +14,19 @@ from collections import defaultdict
 
 logger = logging.getLogger(__name__)
 
+# SEC-29: accept only formats this service actually supports. PIL will happily
+# decode many other formats, and some of those parsers have a history of
+# memory-safety bugs, so the allow-list is checked against both the declared
+# Content-Type and the format PIL actually decoded.
+ALLOWED_IMAGE_FORMATS = {"PNG", "JPEG", "WEBP", "BMP"}
+ALLOWED_MIME_TYPES = {
+    "image/png",
+    "image/jpeg",
+    "image/jpg",
+    "image/webp",
+    "image/bmp",
+}
+
 from ..config import EngineType
 from ..engines import AbstractEngine, TriposrEngine, LGMEngine, TrellisEngine
 from ..export.glb_exporter import export_glb
@@ -139,13 +152,31 @@ async def predict(
 
     try:
         contents = await file.read()
-        
+
         # SECURITY: Validate image size to prevent decompression bombs
         if len(contents) > 10 * 1024 * 1024:  # 10 MB limit
             raise HTTPException(status_code=413, detail="Image too large (max 10 MB)")
-        
+
+        # SEC-29: reject anything that is not one of the formats we support,
+        # based on the declared Content-Type.
+        if file.content_type and file.content_type.lower() not in ALLOWED_MIME_TYPES:
+            raise HTTPException(
+                status_code=415,
+                detail=f"Unsupported media type '{file.content_type}'. "
+                f"Allowed: {', '.join(sorted(ALLOWED_MIME_TYPES))}",
+            )
+
         image = Image.open(io.BytesIO(contents))
-        
+
+        # SEC-29: and again on what PIL actually decoded — a client can lie
+        # about Content-Type, so the decoded format is authoritative.
+        if (image.format or "").upper() not in ALLOWED_IMAGE_FORMATS:
+            raise HTTPException(
+                status_code=415,
+                detail=f"Unsupported image format '{image.format}'. "
+                f"Allowed: {', '.join(sorted(ALLOWED_IMAGE_FORMATS))}",
+            )
+
         # SECURITY: Validate image dimensions to prevent decompression bombs
         if image.width > 4096 or image.height > 4096:
             raise HTTPException(status_code=413, detail="Image dimensions too large (max 4096x4096)")
