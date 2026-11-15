@@ -25,6 +25,7 @@ from .base import AbstractEngine, ReconstructionResult, Mesh3D, GaussianCloud
 from ._compat import lgm_xformers_shim
 from ._paths import extend_sys_path
 from ._memory import free_cuda_cache
+from ._mask import derive_foreground_mask
 
 LGM_NEGATIVE_PROMPT = (
     "ugly, blurry, pixelated obscure, unnatural colors, poor lighting, "
@@ -162,11 +163,13 @@ class LGMEngine(AbstractEngine):
 
         rgba = image.convert("RGBA")
         image_np = np.array(rgba)
+        # ENG-05: use the shared thresholded + speckle-filtered mask instead of
+        # treating every pixel below 248 as foreground (JPEG noise became mask).
         mask = image_np[..., -1] > 10
         if mask.mean() > 0.98:
-            non_white = np.any(image_np[..., :3] < 248, axis=-1)
-            if non_white.any():
-                mask = non_white
+            fg = derive_foreground_mask(image_np)
+            if fg.any():
+                mask = fg
 
         image_np = kiui.op.recenter(image_np, mask, border_ratio=0.2)
         image_np = image_np.astype(np.float32) / 255.0

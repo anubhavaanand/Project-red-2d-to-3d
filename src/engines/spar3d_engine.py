@@ -16,6 +16,7 @@ from .base import AbstractEngine, ReconstructionResult, Mesh3D
 from ._compat import spar3d_compat_shims
 from ._paths import extend_sys_path
 from ._memory import free_cuda_cache
+from ._mask import alpha_is_usable, derive_foreground_mask
 from ._outputs import EngineOutputError, extract_mesh_object
 
 
@@ -247,10 +248,12 @@ class Spar3dEngine(AbstractEngine):
 
         rgba = image.convert("RGBA")
         arr = np.array(rgba)
-        if arr[..., 3].min() > 250:
-            non_white = np.any(arr[..., :3] < 248, axis=-1)
-            if non_white.any():
-                arr[..., 3] = non_white.astype(np.uint8) * 255
+        # ENG-05: use the shared thresholded + speckle-filtered mask instead of
+        # treating every pixel below 248 as foreground (JPEG noise became mask).
+        if not alpha_is_usable(arr):
+            fg = derive_foreground_mask(arr)
+            if fg.any():
+                arr[..., 3] = fg.astype(np.uint8) * 255
                 rgba = Image.fromarray(arr, mode="RGBA")
 
         # ENG-32: a failed crop was printed and ignored, so an uncropped image
