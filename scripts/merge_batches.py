@@ -104,6 +104,7 @@ def merge_all(search_dirs):
         print(f"\nSaved CSV to {out_dir} (skipped LaTeX table: {e})")
 
 
+
 if __name__ == "__main__":
     dirs = sys.argv[1:] or ["./outputs"]
     merge_all(dirs)
