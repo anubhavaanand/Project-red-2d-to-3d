@@ -137,6 +137,9 @@ class TriposrEngine(AbstractEngine):
         TSR.load_state_dict = _remap_load_state_dict
 
         print("[TripoSR] Loading stabilityai/TripoSR …")
+        # SECURITY NOTE: TripoSR uses torch.load (pickle) internally for .ckpt files.
+        # We cannot change this third-party loading mechanism, but we pin to a specific
+        # revision (5b521936b01fbe1890f6f9baed0254ab6351c04a) to prevent tampering.
         self.model = TSR.from_pretrained(
             "stabilityai/TripoSR",
             config_name="config.yaml",
