@@ -108,6 +108,43 @@ def _remap_vit_checkpoint_keys(state_dict, model):
     return out
 
 
+def _signed_volume_about(vertices: np.ndarray, faces: np.ndarray, origin: np.ndarray) -> float:
+    """Signed volume of the tetrahedra formed by each face and ``origin``."""
+    v0 = vertices[faces[:, 0]] - origin
+    v1 = vertices[faces[:, 1]] - origin
+    v2 = vertices[faces[:, 2]] - origin
+    return float(np.sum(v0 * np.cross(v1, v2)) / 6.0)
+
+
+def _orient_outward(mesh_obj) -> str:
+    """Flip a mesh to outward-facing normals when that is safe to determine.
+
+    ENG-06: the old check took the signed volume about the world origin, which
+    is only translation-invariant for a closed, consistently wound surface. On
+    an open or non-manifold marching-cubes mesh the sign can be wrong and a
+    correct mesh gets flipped. Returns a short note so the decision is
+    observable rather than hidden in a bare except.
+    """
+    import trimesh
+
+    vertices = np.asarray(mesh_obj.vertices, dtype=np.float64)
+    faces = np.asarray(mesh_obj.faces, dtype=np.int64)
+    if len(faces) == 0:
+        return "no faces"
+
+    tm = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
+
+    # Only a closed, consistently wound surface has a meaningful signed volume.
+    if not tm.is_watertight or not tm.is_winding_consistent:
+        return "surface not watertight/consistently wound; left as-is"
+
+    centroid = vertices.mean(axis=0)
+    if _signed_volume_about(vertices, faces, centroid) < 0.0:
+        mesh_obj.invert()
+        return "inverted (negative volume about centroid)"
+    return "already outward"
+
+
 class TriposrEngine(AbstractEngine):
     def __init__(self, device: str = "cuda", chunk_size: int = 8192, resolution: int = 256):
         self.device = device
@@ -260,15 +297,15 @@ class TriposrEngine(AbstractEngine):
             )
 
         mesh_obj = meshes[0]
+        # ENG-06: the signed volume was taken about the world origin, which is
+        # only translation-invariant for a closed, consistently wound surface.
+        # For an open or non-manifold marching-cubes mesh the sign can be wrong
+        # and a correct mesh gets flipped. Measure about the centroid, and only
+        # trust the sign when the surface is closed and consistently wound.
         try:
-            f_arr = np.asarray(mesh_obj.faces, dtype=np.int64)
-            v_arr = np.asarray(mesh_obj.vertices, dtype=np.float32)
-            if len(f_arr) > 0:
-                v0, v1, v2 = v_arr[f_arr[:, 0]], v_arr[f_arr[:, 1]], v_arr[f_arr[:, 2]]
-                if float(np.sum(v0 * np.cross(v1, v2))) < 0.0:
-                    mesh_obj.invert()
-        except Exception:
-            pass
+            _orient_outward(mesh_obj)
+        except Exception as e:
+            print(f"[TripoSR] Orientation check skipped: {type(e).__name__}: {e}")
 
         vertex_colors = None
         try:
