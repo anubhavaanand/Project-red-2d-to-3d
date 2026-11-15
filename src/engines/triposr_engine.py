@@ -140,7 +140,9 @@ class TriposrEngine(AbstractEngine):
             _orig_load_state_dict = TSR.load_state_dict
             def _remap_load_state_dict(self_model, state_dict, strict=False, **kwargs):
                 state_dict = _remap_vit_checkpoint_keys(state_dict, self_model)
-                return _orig_load_state_dict(self_model, state_dict, strict=False, **kwargs)
+                # ENG-02: forward the caller's `strict` — hardcoding False meant
+                # a caller asking for strict loading could never detect missing keys.
+                return _orig_load_state_dict(self_model, state_dict, strict=strict, **kwargs)
             TSR.load_state_dict = _remap_load_state_dict
             TSR._state_dict_wrapped = True
 
