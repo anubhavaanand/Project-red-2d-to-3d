@@ -1,3 +1,16 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "image-to-3d-benchmark"
+version = "0.1.0"
+description = "Benchmarking feed-forward single-image 3D reconstruction across paradigms"
+requires-python = ">=3.10"
+
+[tool.setuptools]
+packages = ["src", "src.api", "src.engines", "src.evaluation", "src.export", "src.preprocessing"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py310"
