@@ -230,9 +230,10 @@ class TrellisEngine(AbstractEngine):
                     gs_xyz = gs0.get_xyz.detach().cpu().numpy().astype(np.float32)
                     gs_opa = gs0.get_opacity.detach().cpu().numpy().astype(np.float32).reshape(-1)
                     sh_c0 = 0.28209479177387814
+                    # Store raw SH DC (consistent with PLY exporter convention)
                     gs_rgb = np.clip(
-                        gs0._features_dc.detach().cpu().numpy().astype(np.float32)[:, 0, :3] * sh_c0 + 0.5,
-                        0.0,
+                        gs0._features_dc.detach().cpu().numpy().astype(np.float32)[:, 0, :3],
+                        -1.0,
                         1.0,
                     )
                     mask = gs_opa > 0.10
