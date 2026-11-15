@@ -1,6 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, Security
 from fastapi.responses import FileResponse
 from fastapi.security import APIKeyHeader
+from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
 from PIL import Image
 import io
@@ -61,6 +62,17 @@ def get_engine(engine_type: EngineType) -> AbstractEngine:
 
 OUTPUT_DIR = "./outputs"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+
+def _cleanup_file(path: str) -> None:
+    """Delete a generated artefact after it has been streamed to the client."""
+    try:
+        os.unlink(path)
+    except FileNotFoundError:
+        pass
+    except OSError:
+        # Never let cleanup failure turn a successful response into a 500.
+        pass
 
 @app.get("/health")
 def health_check():
@@ -153,12 +165,24 @@ async def predict(
             out_filename = f"{uuid.uuid4().hex}.glb"
             out_path = os.path.join(OUTPUT_DIR, out_filename)
             export_glb(result.mesh, out_path)
-            return FileResponse(path=out_path, filename=out_filename, media_type="model/gltf-binary")
+            # SECURITY: delete the exported artefact once the response is sent so
+            # predictions cannot accumulate on disk (disk exhaustion / info leak).
+            return FileResponse(
+                path=out_path,
+                filename=out_filename,
+                media_type="model/gltf-binary",
+                background=BackgroundTask(_cleanup_file, out_path),
+            )
         elif result.gaussians is not None:
             out_filename = f"{uuid.uuid4().hex}.ply"
             out_path = os.path.join(OUTPUT_DIR, out_filename)
             export_ply(result.gaussians, out_path)
-            return FileResponse(path=out_path, filename=out_filename, media_type="application/octet-stream")
+            return FileResponse(
+                path=out_path,
+                filename=out_filename,
+                media_type="application/octet-stream",
+                background=BackgroundTask(_cleanup_file, out_path),
+            )
         else:
             raise HTTPException(status_code=500, detail="Engine returned neither mesh nor gaussians.")
 
