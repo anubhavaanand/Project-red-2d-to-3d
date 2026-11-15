@@ -5,7 +5,6 @@ TripoSR Engine — audited wrapper for VAST-AI-Research/TripoSR (stabilityai/Tri
 from __future__ import annotations
 
 import re
-import sys
 import time
 from pathlib import Path
 from typing import Dict, Any
@@ -14,6 +13,7 @@ import numpy as np
 from PIL import Image
 
 from .base import AbstractEngine, ReconstructionResult, Mesh3D
+from ._paths import extend_sys_path
 
 
 def _skimage_mc_func(level, iso=0.0):
@@ -112,15 +112,20 @@ class TriposrEngine(AbstractEngine):
         try:
             from tsr.system import TSR  # noqa: F401
         except ImportError:
-            for c in [
-                Path("/tmp/TripoSR"),
-                Path("/kaggle/working/TripoSR"),
-                Path(__file__).resolve().parents[2] / "TripoSR",
-                Path(__file__).resolve().parents[3] / "TripoSR",
-            ]:
-                if (c / "tsr").is_dir() and str(c) not in sys.path:
-                    sys.path.insert(0, str(c))
-                    break
+            # SEC-16: append (never prepend) so a planted module in a
+            # world-writable clone dir cannot shadow a real dependency.
+            extend_sys_path(
+                *[
+                    c
+                    for c in [
+                        Path("/tmp/TripoSR"),
+                        Path("/kaggle/working/TripoSR"),
+                        Path(__file__).resolve().parents[2] / "TripoSR",
+                        Path(__file__).resolve().parents[3] / "TripoSR",
+                    ]
+                    if (c / "tsr").is_dir()
+                ]
+            )
 
     def load_model(self) -> None:
         self._ensure_tsr_imports()

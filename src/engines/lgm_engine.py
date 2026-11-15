@@ -26,6 +26,7 @@ from huggingface_hub import hf_hub_download
 
 from .base import AbstractEngine, ReconstructionResult, Mesh3D, GaussianCloud
 from ._compat import lgm_xformers_shim
+from ._paths import extend_sys_path
 
 LGM_NEGATIVE_PROMPT = (
     "ugly, blurry, pixelated obscure, unnatural colors, poor lighting, "
@@ -51,16 +52,21 @@ class LGMEngine(AbstractEngine):
         self.opt = None
 
     def _ensure_lgm_imports(self) -> None:
+        # SEC-16: append (never prepend) so a planted module in a
+        # world-writable clone dir cannot shadow a real dependency.
         for repo_name in ("LGM", "mvdream"):
-            for c in [
-                Path(f"/tmp/{repo_name}"),
-                Path(f"/kaggle/working/{repo_name}"),
-                Path(__file__).resolve().parents[2] / repo_name,
-                Path(__file__).resolve().parents[3] / repo_name,
-            ]:
-                if c.is_dir() and str(c) not in sys.path:
-                    sys.path.insert(0, str(c))
-                    break
+            extend_sys_path(
+                *[
+                    c
+                    for c in [
+                        Path(f"/tmp/{repo_name}"),
+                        Path(f"/kaggle/working/{repo_name}"),
+                        Path(__file__).resolve().parents[2] / repo_name,
+                        Path(__file__).resolve().parents[3] / repo_name,
+                    ]
+                    if c.is_dir()
+                ]
+            )
 
     def load_model(self, big: bool = True) -> None:
         # SEC-15: the xformers shim is scoped to this block and removed on exit,
