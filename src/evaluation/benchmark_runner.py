@@ -139,10 +139,8 @@ def bake_texture_to_vertices(tm, mesh_path: Optional[str | Path] = None):
     img = _find_gso_texture_image(tm, mesh_path=mesh_path)
 
     if uv is None or len(uv) != len(tm.vertices) or img is None:
-        return trimesh.visual.ColorVisuals(
-            mesh=tm,
-            vertex_colors=np.full((len(tm.vertices), 4), 200, dtype=np.uint8),
-        )
+        # Return None to signal texture baking failure (caller should handle)
+        return None
 
     im = np.asarray(img.convert("RGBA"), dtype=np.float32)
     h, w = im.shape[:2]
