@@ -1035,7 +1035,14 @@ class BenchmarkRunner:
                         row["psnr"] = np.nan
                         row["lpips"] = np.nan
 
-                    row["metadata"] = recon.metadata
+                    # DATA-05: serialise as JSON, not str(dict). The CSV
+                    # previously held single-quoted Python reprs that consumers
+                    # could not json.loads.
+                    row["metadata"] = (
+                        json.dumps(recon.metadata, default=str)
+                        if recon.metadata is not None
+                        else None
+                    )
                     self.results.append(row)
                     try:
                         _ck_p = self.output_dir / f"{engine_name.lower()}_results.json"
