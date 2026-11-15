@@ -34,6 +34,14 @@ LGM_NEGATIVE_PROMPT = (
 )
 
 
+class LgmMeshExtractionError(RuntimeError):
+    """ENG-20: raised when LGM cannot turn its Gaussians into a mesh.
+
+    Previously every failure printed a message and returned ``None``, so the
+    runner recorded a NaN Chamfer Distance with no structured error.
+    """
+
+
 class LGMEngine(AbstractEngine):
     def __init__(
         self,
@@ -205,7 +213,19 @@ class LGMEngine(AbstractEngine):
             sh_coeffs=rgb,
         )
 
-        mesh_out = self._gaussians_to_mesh(gaussians_out) if extract_mesh else None
+        # ENG-20: mesh extraction failure is recorded, not swallowed. The
+        # Gaussians are still returned so the caller can fall back to them.
+        mesh_error = None
+        if extract_mesh:
+            try:
+                mesh_out = self._gaussians_to_mesh(gaussians_out)
+            except LgmMeshExtractionError as e:
+                mesh_out = None
+                mesh_error = str(e)
+                print(f"[LGM] {mesh_error}")
+        else:
+            mesh_out = None
+
         latency = time.perf_counter() - t0
         torch.cuda.empty_cache()
 
@@ -221,6 +241,7 @@ class LGMEngine(AbstractEngine):
                 "vertex_count": len(mesh_out.vertices) if mesh_out is not None else 0,
                 "face_count": len(mesh_out.faces) if mesh_out is not None else 0,
                 "has_vertex_colors": (mesh_out is not None and mesh_out.vertex_colors is not None),
+                "mesh_error": mesh_error,
             },
         )
 
@@ -285,8 +306,9 @@ class LGMEngine(AbstractEngine):
 
             nonzero = grid_np[grid_np > 1e-4]
             if len(nonzero) == 0:
-                print("[LGM] WARNING: No foreground gaussians found, returning None")
-                return None
+                raise LgmMeshExtractionError(
+                    "No foreground Gaussians above the opacity floor; nothing to mesh"
+                )
             iso = float(np.percentile(nonzero, 48))
 
             # Always use skimage.measure.marching_cubes on CPU grid_np so vertex
@@ -295,14 +317,12 @@ class LGMEngine(AbstractEngine):
             try:
                 verts, faces, _, _ = measure.marching_cubes(grid_np, iso)
             except Exception as e:
-                print(f"[LGM] WARNING: Marching cubes failed: {e}")
-                return None
+                raise LgmMeshExtractionError(f"Marching cubes failed: {e}") from e
             verts = verts.astype(np.float32)
             faces = np.ascontiguousarray(faces[:, [0, 2, 1]], dtype=np.int64)
 
             if len(verts) == 0 or len(faces) == 0:
-                print("[LGM] WARNING: Marching cubes produced empty mesh")
-                return None
+                raise LgmMeshExtractionError("Marching cubes produced an empty mesh")
 
             verts = (verts / (resolution - 1) * 2.0 - 1.0) * pos_scale.numpy() + pos_center.numpy()
 
@@ -349,8 +369,12 @@ class LGMEngine(AbstractEngine):
                 vertex_colors=vertex_colors.astype(np.float32),
             )
         except Exception as e:
-            print(f"[LGM] Mesh extraction error: {e}")
-            return None
+            # ENG-20: a bare except that printed and returned None meant the
+            # runner recorded a NaN CD with no structured error. Raise so the
+            # caller can distinguish "no mesh" from "mesh extraction failed".
+            raise LgmMeshExtractionError(
+                f"LGM mesh extraction failed: {type(e).__name__}: {e}"
+            ) from e
 
     def get_engine_info(self) -> Dict[str, Any]:
         return {
