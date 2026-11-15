@@ -26,6 +26,7 @@ from PIL import Image
 from .base import AbstractEngine, ReconstructionResult, Mesh3D, GaussianCloud
 from ._paths import extend_sys_path
 from ._memory import free_cuda_cache
+from ._mask import alpha_is_usable, derive_foreground_mask
 
 # ENG-29: TRELLIS reads these at import time, so they must be set before the
 # engine is imported — but setting them at module scope mutated global state
@@ -173,10 +174,12 @@ class TrellisEngine(AbstractEngine):
         p = self.pipeline
         rgba = image.convert("RGBA")
         arr = np.array(rgba)
-        if arr[..., 3].min() > 250:
-            non_white = np.any(arr[..., :3] < 248, axis=-1)
-            if non_white.any():
-                arr[..., 3] = non_white.astype(np.uint8) * 255
+        # ENG-05: use the shared thresholded + speckle-filtered mask instead of
+        # treating every pixel below 248 as foreground (JPEG noise became mask).
+        if not alpha_is_usable(arr):
+            fg = derive_foreground_mask(arr)
+            if fg.any():
+                arr[..., 3] = fg.astype(np.uint8) * 255
                 rgba = Image.fromarray(arr, mode="RGBA")
 
         t0 = time.perf_counter()
