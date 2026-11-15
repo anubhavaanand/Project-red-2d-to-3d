@@ -332,6 +332,9 @@ class LGMEngine(AbstractEngine):
             verts = (verts / (resolution - 1) * 2.0 - 1.0) * pos_scale.numpy() + pos_center.numpy()
 
             tm = trimesh.Trimesh(vertices=verts, faces=faces, process=False)
+            # ENG-19: trimesh.split can return an empty list; max() over it would
+            # raise. The len() guard covers that, but the bare except also hid real
+            # failures — keep the cleanup best-effort yet diagnosable.
             try:
                 parts = tm.split(only_watertight=False)
                 if len(parts) > 1:
@@ -339,8 +342,11 @@ class LGMEngine(AbstractEngine):
                     kept = [p for p in parts if len(p.faces) >= max(40, int(max_faces * 0.08))]
                     if kept:
                         tm = trimesh.util.concatenate(kept)
-            except Exception:
-                pass
+                elif not parts:
+                    print("[LGM] Island cleanup: split returned no parts; keeping the full mesh")
+            except Exception as e:
+                # Never fail the whole extraction over cosmetic island pruning.
+                print(f"[LGM] Island cleanup skipped: {type(e).__name__}: {e}")
 
             verts_final = np.asarray(tm.vertices, dtype=np.float32)
             faces_final = np.asarray(tm.faces, dtype=np.int64)
