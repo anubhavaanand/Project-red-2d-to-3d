@@ -6,83 +6,16 @@ from __future__ import annotations
 
 import sys
 import time
-import types
 from pathlib import Path
 from typing import Dict, Any
 
 import numpy as np
-import packaging
 import torch
 from PIL import Image
 from scipy.spatial import cKDTree
 
 from .base import AbstractEngine, ReconstructionResult, Mesh3D
-
-
-def _install_spar3d_compat_shims() -> None:
-    if "pkg_resources" not in sys.modules:
-        pkgr = types.ModuleType("pkg_resources")
-        pkgr.packaging = packaging
-        sys.modules["pkg_resources"] = pkgr
-    elif not hasattr(sys.modules["pkg_resources"], "packaging"):
-        sys.modules["pkg_resources"].packaging = packaging
-
-    try:
-        import transformers.pytorch_utils as _tpu
-        if not hasattr(_tpu, "find_pruneable_heads_and_indices"):
-            def _find_pruneable_heads_and_indices(heads, n_heads, head_size, already_pruned_heads):
-                heads = set(heads) - already_pruned_heads
-                mask = torch.ones(n_heads, head_size)
-                for head in heads:
-                    head = head - sum(1 if h < head else 0 for h in already_pruned_heads)
-                    mask[head] = 0
-                mask = mask.view(-1).contiguous().eq(1)
-                index = torch.arange(len(mask))[mask].long()
-                return heads, index
-            _tpu.find_pruneable_heads_and_indices = _find_pruneable_heads_and_indices
-
-        if not hasattr(_tpu, "prune_linear_layer"):
-            def _prune_linear_layer(layer, index, dim=0):
-                index = index.to(layer.weight.device)
-                W = layer.weight.index_select(dim, index).clone().detach()
-                b = (layer.bias.clone().detach() if dim == 1 else layer.bias[index].clone().detach()) if layer.bias is not None else None
-                new_size = list(layer.weight.size())
-                new_size[dim] = len(index)
-                new_layer = torch.nn.Linear(new_size[1], new_size[0], bias=layer.bias is not None).to(layer.weight.device)
-                new_layer.weight.requires_grad = False
-                new_layer.weight.copy_(W.contiguous())
-                new_layer.weight.requires_grad = True
-                if layer.bias is not None:
-                    new_layer.bias.requires_grad = False
-                    new_layer.bias.copy_(b.contiguous())
-                    new_layer.bias.requires_grad = True
-                return new_layer
-            _tpu.prune_linear_layer = _prune_linear_layer
-
-        from transformers.modeling_utils import PreTrainedModel
-        if not hasattr(PreTrainedModel, "get_head_mask"):
-            def _get_head_mask(self, head_mask, num_hidden_layers, is_attention_chunked=False):
-                if head_mask is not None:
-                    head_mask = self._convert_head_mask_to_5d(head_mask, num_hidden_layers)
-                    if is_attention_chunked is True:
-                        head_mask = head_mask.unsqueeze(-1)
-                else:
-                    head_mask = [None] * num_hidden_layers
-                return head_mask
-            PreTrainedModel.get_head_mask = _get_head_mask
-    except Exception:
-        pass
-
-    # SECURITY: Do not silently install a dummy transparent_background module.
-    # If the real package is missing, raise an actionable error.
-    if "transparent_background" not in sys.modules:
-        try:
-            import transparent_background  # noqa: F401
-        except ImportError:
-            raise ImportError(
-                "transparent_background is required for SPAR3D. "
-                "Install it with: pip install transparent-background"
-            )
+from ._compat import spar3d_compat_shims
 
 
 class Spar3dEngine(AbstractEngine):
@@ -115,45 +48,46 @@ class Spar3dEngine(AbstractEngine):
         )
 
     def load_model(self) -> None:
-        _install_spar3d_compat_shims()
-        repo_dir = self._locate_repo()
-        for p in [repo_dir, Path("/tmp/CLIP"), Path("/tmp/AlphaCLIP"), Path("/kaggle/working/CLIP"), Path("/kaggle/working/AlphaCLIP")]:
-            if p.is_dir() and str(p) not in sys.path:
-                sys.path.insert(0, str(p))
+        # SEC-15: shims are scoped to this block and undone on exit.
+        with spar3d_compat_shims():
+            repo_dir = self._locate_repo()
+            for p in [repo_dir, Path("/tmp/CLIP"), Path("/tmp/AlphaCLIP"), Path("/kaggle/working/CLIP"), Path("/kaggle/working/AlphaCLIP")]:
+                if p.is_dir() and str(p) not in sys.path:
+                    sys.path.insert(0, str(p))
 
-        from spar3d.system import SPAR3D
-        from spar3d.utils import foreground_crop
+            from spar3d.system import SPAR3D
+            from spar3d.utils import foreground_crop
 
-        print(f"[SPAR3D] Loading model (low_vram_mode={self.low_vram_mode}) …")
-        try:
-            self.model = SPAR3D.from_pretrained(
-                "stabilityai/stable-point-aware-3d",
-                config_name="config.yaml",
-                weight_name="model.safetensors",
-                low_vram_mode=self.low_vram_mode,
-                revision="5699918cb34f55cd7d828493d2725f3038313761",  # pinned SHA
-            )
-        except Exception as e:
-            # SECURITY: Only fall back to mirror if explicitly allowed
-            import os
-            if os.environ.get("SPAR3D_ALLOW_MIRROR", "0") == "1":
-                print(f"[SPAR3D] WARNING: Primary repo failed ({e}). Falling back to third-party mirror (zimengxiong/Modelr-SPAR3D)")
-                print("[SPAR3D] WARNING: Third-party code will be executed. Set SPAR3D_ALLOW_MIRROR=0 to disable.")
+            print(f"[SPAR3D] Loading model (low_vram_mode={self.low_vram_mode}) …")
+            try:
                 self.model = SPAR3D.from_pretrained(
-                    "zimengxiong/Modelr-SPAR3D",
+                    "stabilityai/stable-point-aware-3d",
                     config_name="config.yaml",
                     weight_name="model.safetensors",
                     low_vram_mode=self.low_vram_mode,
-                    revision="af033552e8c7d25971c4fca69ab4c926f43b2ec2",  # pinned SHA
+                    revision="5699918cb34f55cd7d828493d2725f3038313761",  # pinned SHA
                 )
-            else:
-                raise RuntimeError(
-                    f"SPAR3D primary repo failed ({e}). "
-                    "Set SPAR3D_ALLOW_MIRROR=1 to allow fallback to third-party mirror."
-                ) from e
-        self.model.to(self.device).eval()
-        self._foreground_crop = foreground_crop
-        print("[SPAR3D] Model loaded.")
+            except Exception as e:
+                # SECURITY: Only fall back to mirror if explicitly allowed
+                import os
+                if os.environ.get("SPAR3D_ALLOW_MIRROR", "0") == "1":
+                    print(f"[SPAR3D] WARNING: Primary repo failed ({e}). Falling back to third-party mirror (zimengxiong/Modelr-SPAR3D)")
+                    print("[SPAR3D] WARNING: Third-party code will be executed. Set SPAR3D_ALLOW_MIRROR=0 to disable.")
+                    self.model = SPAR3D.from_pretrained(
+                        "zimengxiong/Modelr-SPAR3D",
+                        config_name="config.yaml",
+                        weight_name="model.safetensors",
+                        low_vram_mode=self.low_vram_mode,
+                        revision="af033552e8c7d25971c4fca69ab4c926f43b2ec2",  # pinned SHA
+                    )
+                else:
+                    raise RuntimeError(
+                        f"SPAR3D primary repo failed ({e}). "
+                        "Set SPAR3D_ALLOW_MIRROR=1 to allow fallback to third-party mirror."
+                    ) from e
+            self.model.to(self.device).eval()
+            self._foreground_crop = foreground_crop
+            print("[SPAR3D] Model loaded.")
 
     @staticmethod
     def _extract_spar3d_vertex_colors(tm, verts: np.ndarray) -> np.ndarray | None:

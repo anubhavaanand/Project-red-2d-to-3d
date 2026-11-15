@@ -25,63 +25,12 @@ from safetensors.torch import load_file
 from huggingface_hub import hf_hub_download
 
 from .base import AbstractEngine, ReconstructionResult, Mesh3D, GaussianCloud
+from ._compat import lgm_xformers_shim
 
 LGM_NEGATIVE_PROMPT = (
     "ugly, blurry, pixelated obscure, unnatural colors, poor lighting, "
     "dull, unclear, cropped, lowres, low quality, artifacts, duplicate"
 )
-
-
-def _install_lgm_xformers_shim() -> None:
-    import importlib.util
-    # Only install shim if xformers is not actually installed
-    if importlib.util.find_spec("xformers") is not None:
-        try:
-            import xformers.ops as _xops_real  # noqa: F401
-            # Check for the actual function we need
-            if hasattr(_xops_real, "memory_efficient_attention"):
-                return
-        except Exception:
-            pass
-    import types
-    import torch.nn.functional as _F
-
-    def _memory_efficient_attention(q, k, v, attn_bias=None, op=None, **_kw):
-        # SECURITY: xformers attn_bias is not a dense mask. If provided, we cannot
-        # safely convert it to PyTorch's attn_mask format. Reject explicitly.
-        if attn_bias is not None:
-            raise NotImplementedError(
-                "xformers attention bias is not supported in the PyTorch SDPA shim. "
-                "Use dense boolean masks instead."
-            )
-        if q.ndim == 3:
-            out = _F.scaled_dot_product_attention(
-                q.unsqueeze(1), k.unsqueeze(1), v.unsqueeze(1)
-            )
-            return out.squeeze(1)
-        # xformers 4D tensors are (B, N, H, D); PyTorch SDPA expects (B, H, N, D)
-        out = _F.scaled_dot_product_attention(
-            q.transpose(1, 2), k.transpose(1, 2), v.transpose(1, 2)
-        )
-        return out.transpose(1, 2).contiguous()
-
-    def _unbind(tensor, dim: int = 0):
-        return torch.unbind(tensor, dim=dim)
-
-    import importlib.machinery as _machinery
-    _xm = types.ModuleType("xformers")
-    _xops = types.ModuleType("xformers.ops")
-    _xops.memory_efficient_attention = _memory_efficient_attention
-    _xops.unbind = _unbind
-    _xm.ops = _xops
-    # diffusers calls importlib.util.find_spec("xformers") at import time, which
-    # raises ValueError("xformers.__spec__ is None") on a fake module without __spec__.
-    _xm.__spec__ = _machinery.ModuleSpec("xformers", None, is_package=True)
-    _xm.__path__ = []
-    _xops.__spec__ = _machinery.ModuleSpec("xformers.ops", None)
-    sys.modules["xformers"] = _xm
-    sys.modules["xformers.ops"] = _xops
-    print("[LGM] Installed PyTorch SDPA shim for xformers.ops.memory_efficient_attention ✅")
 
 
 class LGMEngine(AbstractEngine):
@@ -114,42 +63,40 @@ class LGMEngine(AbstractEngine):
                     break
 
     def load_model(self, big: bool = True) -> None:
-        # Save xformers modules to restore after model loading
-        import sys
-        _saved_xformers = {k: v for k, v in sys.modules.items() if k.startswith('xformers')}
-        
-        _install_lgm_xformers_shim()
-        self._ensure_lgm_imports()
-        from diffusers import DDIMScheduler
-        from mvdream.pipeline_mvdream import MVDreamPipeline
-        from core.options import Options, config_defaults
-        from core.models import LGM
+        # SEC-15: the xformers shim is scoped to this block and removed on exit,
+        # so it cannot leak a fake API into unrelated imports.
+        with lgm_xformers_shim():
+            self._ensure_lgm_imports()
+            from diffusers import DDIMScheduler
+            from mvdream.pipeline_mvdream import MVDreamPipeline
+            from core.options import Options, config_defaults
+            from core.models import LGM
 
-        print("[LGM] Loading U-Net from ashawkey/LGM …")
-        self.opt = config_defaults["big"] if big else Options()
-        self.model = LGM(self.opt)
-        ckpt_path = hf_hub_download(
-            repo_id="ashawkey/LGM",
-            filename="model_fp16_fixrot.safetensors",
-            revision="bc0097d24ffc5efc2e6a216edd579128f85f53ab",  # pinned SHA
-        )
-        ckpt = load_file(ckpt_path, device="cpu")
-        model_sd = self.model.state_dict()
-        
-        # Warn about dropped keys
-        dropped_keys = [k for k in ckpt.keys() if k not in model_sd]
-        mismatched_shapes = [k for k in ckpt.keys() if k in model_sd and model_sd[k].shape != ckpt[k].shape]
-        if dropped_keys:
-            print(f"[LGM] WARNING: Dropping {len(dropped_keys)} checkpoint keys not in model: {dropped_keys[:5]}...")
-        if mismatched_shapes:
-            print(f"[LGM] WARNING: Dropping {len(mismatched_shapes)} checkpoint keys with shape mismatch: {mismatched_shapes[:5]}...")
-        
-        filtered = {
-            k: v for k, v in ckpt.items()
-            if k in model_sd and model_sd[k].shape == v.shape
-        }
-        self.model.load_state_dict(filtered, strict=False)
-        self.model = self.model.half().to(self.device).eval()
+            print("[LGM] Loading U-Net from ashawkey/LGM …")
+            self.opt = config_defaults["big"] if big else Options()
+            self.model = LGM(self.opt)
+            ckpt_path = hf_hub_download(
+                repo_id="ashawkey/LGM",
+                filename="model_fp16_fixrot.safetensors",
+                revision="bc0097d24ffc5efc2e6a216edd579128f85f53ab",  # pinned SHA
+            )
+            ckpt = load_file(ckpt_path, device="cpu")
+            model_sd = self.model.state_dict()
+
+            # Warn about dropped keys
+            dropped_keys = [k for k in ckpt.keys() if k not in model_sd]
+            mismatched_shapes = [k for k in ckpt.keys() if k in model_sd and model_sd[k].shape != ckpt[k].shape]
+            if dropped_keys:
+                print(f"[LGM] WARNING: Dropping {len(dropped_keys)} checkpoint keys not in model: {dropped_keys[:5]}...")
+            if mismatched_shapes:
+                print(f"[LGM] WARNING: Dropping {len(mismatched_shapes)} checkpoint keys with shape mismatch: {mismatched_shapes[:5]}...")
+
+            filtered = {
+                k: v for k, v in ckpt.items()
+                if k in model_sd and model_sd[k].shape == v.shape
+            }
+            self.model.load_state_dict(filtered, strict=False)
+            self.model = self.model.half().to(self.device).eval()
 
         print("[LGM] Loading ImageDream multi-view diffusion …")
         # SECURITY: Pin to a specific commit hash to prevent silent upstream changes.
@@ -169,14 +116,7 @@ class LGMEngine(AbstractEngine):
             self.mv_pipeline.scheduler.config
         )
         self.rays_embeddings = self.model.prepare_default_rays(self.device)
-        
-        # Restore xformers modules after model loading
-        import sys
-        for k in list(sys.modules.keys()):
-            if k.startswith('xformers'):
-                del sys.modules[k]
-        sys.modules.update(_saved_xformers)
-        
+
         print("[LGM] Model loaded.")
 
     def predict(self, image: Image.Image, extract_mesh: bool = True) -> ReconstructionResult:
