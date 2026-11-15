@@ -43,7 +43,7 @@ Two-sided paired Wilcoxon signed-rank tests over the 100 shared objects:
 ## Protocol
 
 - **Sampling** — 10,000 surface points per mesh, centroid-centered, normalized to the unit sphere at the 99.5th-percentile radius.
-- **Alignment** — 72 candidate rotations (6 principal axis-up orientations × 12 yaw steps) followed by 3-iteration Kabsch ICP, scored by symmetric mean Chamfer Distance.
+- **Alignment** — 72 candidate rotations (6 principal axis-up orientations × 12 yaw steps) followed by 5-iteration Kabsch ICP, scored by symmetric mean Chamfer Distance.
 - **Rendering** — one novel view at 65° azimuth / 15° elevation, rendered at 2× and Lanczos-downsampled to 256², under three-point studio lighting (ambient 0.45, key 0.85, fill 0.35, rim 0.25, distance 2.45, yfov 49.1°) with linear-to-sRGB encoding.
 - **LGM proxy mesh** — opacity filter α > 0.10, 98th-percentile spatial trim, 3D Gaussian smoothing (k = 7, σ = 1.10), 256³ Marching Cubes at the 48th percentile, floater pruning, and k = 6 opacity-weighted color transfer from core Gaussians (α > 0.35, fallback α > 0.20).
 - **TRELLIS** — 8 + 8 sampling steps (CFG 7.5 / 3.0) with staged CPU–GPU offloading.
