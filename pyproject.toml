@@ -1,78 +1,41 @@
-[project]
-name = "image-to-3d-benchmark"
-version = "0.1.0"
-description = "Image-to-3D benchmark pipeline for evaluating various 3D generation engines."
-readme = "README.md"
-requires-python = ">=3.10"
-dependencies = [
-    "torch",
-    "torchvision",
-    "Pillow",
-    "fastapi",
-    "uvicorn",
-    "trimesh",
-    "numpy",
-    "pydantic",
-    "lpips",
-    "scipy",
-    "open3d",
-    "rembg[gpu]",
-    "huggingface-hub",
-    "pandas"
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "B008",  # do not perform function calls in argument defaults
+    "B905",  # zip without strict= parameter
 ]
 
-[project.optional-dependencies]
-triposr = [
-    "torchmcubes @ git+https://github.com/tatsy/torchmcubes.git",
-    "xatlas==0.0.9",
-    "omegaconf==2.3.0",
-]
-lgm = [
-    "tyro",
-    "kiui>=0.2.3",
-    "safetensors",
-    "einops",
-    "roma",
-    "plyfile",
-    "scikit-image",
-    "scikit-learn",
-    "diff-gaussian-rasterization @ git+https://github.com/ashawkey/diff-gaussian-rasterization.git",
-]
-trellis = [
-    "spconv @ git+https://github.com/traveller59/spconv.git",
-    "flash-attn @ git+https://github.com/Dao-AILab/flash-attention.git",
-    "xformers",
-    "diffoctreerast @ git+https://github.com/facebookresearch/diffoctreerast.git",
-    "nvdiffrast",
-    "easydict>=1.13",
-    "imageio[ffmpeg]",
-    "timm",
-    "kornia",
-]
-all = [
-    "torchmcubes @ git+https://github.com/tatsy/torchmcubes.git",
-    "xatlas==0.0.9",
-    "omegaconf==2.3.0",
-    "tyro",
-    "kiui>=0.2.3",
-    "safetensors",
-    "einops",
-    "roma",
-    "plyfile",
-    "scikit-image",
-    "scikit-learn",
-    "diff-gaussian-rasterization @ git+https://github.com/ashawkey/diff-gaussian-rasterization.git",
-    "spconv @ git+https://github.com/traveller59/spconv.git",
-    "flash-attn @ git+https://github.com/Dao-AILab/flash-attention.git",
-    "xformers",
-    "diffoctreerast @ git+https://github.com/facebookresearch/diffoctreerast.git",
-    "nvdiffrast",
-    "easydict>=1.13",
-    "imageio[ffmpeg]",
-    "timm",
-    "kornia",
-]
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]  # unused imports in __init__
+"tests/*" = ["B011"]      # assert false in tests
 
-[build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+no_strict_optional = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"

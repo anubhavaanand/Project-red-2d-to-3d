@@ -1,0 +1,159 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pytest pytest-cov pytest-asyncio
+          pip install -r requirements.txt
+
+      - name: Run tests
+        run: |
+          pytest tests/ -v --cov=src --cov-report=term-missing --cov-report=xml
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.xml
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install linting tools
+        run: |
+          pip install ruff mypy
+
+      - name: Run ruff (lint + format check)
+        run: |
+          ruff check src/ tests/
+          ruff format --check src/ tests/
+
+      - name: Run mypy (type check)
+        run: |
+          mypy src/ --ignore-missing-imports --no-strict-optional
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install security tools
+        run: |
+          pip install bandit safety
+
+      - name: Run bandit (security lint)
+        run: |
+          bandit -r src/ -ll -ii
+
+      - name: Check dependencies for vulnerabilities
+        run: |
+          safety check --json || true
+        continue-on-error: true
+
+  import-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install -e .
+
+      - name: Verify all engines import cleanly
+        run: |
+          python -c "
+          from src.engines.triposr_engine import TriposrEngine
+          from src.engines.lgm_engine import LGMEngine
+          from src.engines.trellis_engine import TrellisEngine
+          from src.engines.spar3d_engine import Spar3dEngine
+          from src.evaluation.benchmark_runner import BenchmarkRunner
+          print('All imports OK')
+          "
+
+  results-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install -e .
+          pip install pandas
+
+      - name: Validate results CSV schema
+        run: |
+          python -c "
+          import pandas as pd
+          import sys
+
+          df = pd.read_csv('results/unified_results_4engines_100obj.csv')
+          required_cols = [
+              'engine', 'sample_id', 'latency_s', 'vram_peak_gb',
+              'chamfer_distance', 'f_score_0.1', 'f_score_0.2', 'f_score_0.5',
+              'psnr', 'lpips'
+          ]
+          missing = [c for c in required_cols if c not in df.columns]
+          if missing:
+              print(f'ERROR: Missing columns: {missing}')
+              sys.exit(1)
+
+          if len(df) != 400:
+              print(f'ERROR: Expected 400 rows, got {len(df)}')
+              sys.exit(1)
+
+          engines = df['engine'].unique()
+          expected = {'TripoSR', 'LGM', 'TRELLIS', 'SPAR3D'}
+          if set(engines) != expected:
+              print(f'ERROR: Expected engines {expected}, got {set(engines)}')
+              sys.exit(1)
+
+          for col in ['chamfer_distance', 'f_score_0.1', 'f_score_0.2', 'psnr']:
+              if df[col].isna().any():
+                  print(f'ERROR: NaN values in {col}')
+                  sys.exit(1)
+
+          print('Results CSV contract validation PASSED')
+          "
