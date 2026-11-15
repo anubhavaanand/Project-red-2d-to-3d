@@ -44,8 +44,10 @@ python scripts/rebuild_figures.py
 
 ## Columns
 
-`engine`, `sample_id`, `latency_s`, `vram_peak_gb`, `vram_reserved_gb`, `chamfer_distance`, `f_score_0.1`, `f_score_0.2`, `f_score_0.5`, `psnr`, `lpips`, `metadata`, `vertex_count`, `face_count`, `mesh_size_mb`.
+`engine`, `sample_id`, `latency_s`, `vram_peak_gb`, `vram_reserved_gb`, `alignment_failed`, `chamfer_distance`, `f_score_0.1`, `f_score_0.2`, `f_score_0.5`, `psnr`, `lpips`, `metadata`, `vertex_count`, `face_count`, `mesh_size_mb`.
 
 `vram_peak_gb` is `torch.cuda.max_memory_allocated()` — what the published v1.0 table reports. `vram_reserved_gb` is `torch.cuda.max_memory_reserved()`, which includes the CUDA context and allocator fragmentation and so runs higher; it is provided for comparison with `nvidia-smi` and does not replace the frozen figure.
 
 `metadata` is a JSON object (not a Python repr), so consumers can `json.loads(row["metadata"])`.
+
+`alignment_failed` is `true` when the mesh could not be aligned to the ground truth (no GT points, or alignment failed). In that case the exported OBJ is written as `<engine>_unaligned_mesh.obj` — it is in the engine's raw frame and scale and is **not comparable across engines**.

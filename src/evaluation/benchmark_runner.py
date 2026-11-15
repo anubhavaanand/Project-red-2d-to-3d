@@ -966,6 +966,12 @@ class BenchmarkRunner:
                         row["f_score_0.2"] = np.nan
                         row["f_score_0.5"] = np.nan
 
+                    # EVAL-22: when alignment fails (or GT points are missing)
+                    # we fall back to the engine's raw mesh. Exporting it under
+                    # the same name as an aligned mesh made downloads look
+                    # comparable across engines when they are not.
+                    alignment_failed = aligned_for_render is None
+                    row["alignment_failed"] = alignment_failed
                     render_target = (
                         aligned_for_render if aligned_for_render is not None else recon.mesh
                     )
@@ -1046,13 +1052,24 @@ class BenchmarkRunner:
                                     faces=render_target.faces,
                                     vertex_colors=vc_out,
                                     process=False,
-                                ).export(str(qdir / f"{engine_name}_mesh.obj"))
+                                ).export(
+                                    str(
+                                        qdir
+                                        / (
+                                            f"{engine_name}_unaligned_mesh.obj"
+                                            if alignment_failed
+                                            else f"{engine_name}_mesh.obj"
+                                        )
+                                    )
+                                )
                                 self._meshes_saved += 1
                             except Exception:
                                 pass
                     else:
                         row["psnr"] = np.nan
                         row["lpips"] = np.nan
+                        # no render target at all (neither aligned nor raw mesh)
+                        row["alignment_failed"] = True
 
                     # DATA-05: serialise as JSON, not str(dict). The CSV
                     # previously held single-quoted Python reprs that consumers
