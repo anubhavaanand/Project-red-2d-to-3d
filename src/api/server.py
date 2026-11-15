@@ -15,7 +15,14 @@ from collections import defaultdict
 logger = logging.getLogger(__name__)
 
 from ..config import EngineType
-from ..engines import AbstractEngine, TriposrEngine, LGMEngine, TrellisEngine
+from ..engines import (
+    AbstractEngine,
+    TriposrEngine,
+    LGMEngine,
+    TrellisEngine,
+    Spar3dEngine,
+    SF3DEngine,
+)
 from ..export.glb_exporter import export_glb
 from ..export.ply_exporter import export_ply
 from ..preprocessing.background_removal import BackgroundRemover
@@ -59,6 +66,10 @@ def get_engine(engine_type: EngineType) -> AbstractEngine:
             _engines[engine_type] = LGMEngine()
         elif engine_type == EngineType.TRELLIS:
             _engines[engine_type] = TrellisEngine()
+        elif engine_type == EngineType.SPAR3D:
+            _engines[engine_type] = Spar3dEngine()
+        elif engine_type == EngineType.SF3D:
+            _engines[engine_type] = SF3DEngine()
         else:
             raise ValueError(f"Unknown engine: {engine_type}")
     return _engines[engine_type]
@@ -120,6 +131,30 @@ def list_engines():
             },
             "default_output_format": "mesh",
             "supported_output_formats": ["mesh", "gaussians"],
+        },
+        {
+            "id": EngineType.SPAR3D,
+            "info": {
+                "name": "SPAR3D",
+                "paper": "arXiv:2501.04689",
+                "latency_approx": "~37.5s (T4)",
+                "vram_approx": "~9.2 GB (T4)",
+                "output_format": "mesh (.glb) — point diffusion + DMTet + PBR",
+            },
+            "default_output_format": "mesh",
+            "supported_output_formats": ["mesh"],
+        },
+        {
+            "id": EngineType.SF3D,
+            "info": {
+                "name": "SF3D",
+                "paper": "arXiv:2408.00653",
+                "latency_approx": "~0.5s (A100) / ~1.5-2s (T4)",
+                "vram_approx": "~6–7 GB (low_vram_mode=True)",
+                "output_format": "mesh (.glb) — textured UV mesh (DMTet)",
+            },
+            "default_output_format": "mesh",
+            "supported_output_formats": ["mesh"],
         },
     ]
 
@@ -185,10 +220,16 @@ async def predict(
             want_mesh = requested_format != "gaussians"
             result = await run_in_threadpool(engine.predict, image, want_mesh)
         else:
-            if requested_format == "gaussians" and engine_type == EngineType.TRIPOSR:
+            mesh_only = {
+                EngineType.TRIPOSR: "TripoSR",
+                EngineType.SPAR3D: "SPAR3D",
+                EngineType.SF3D: "SF3D",
+            }
+            if requested_format == "gaussians" and engine_type in mesh_only:
                 raise HTTPException(
                     status_code=400,
-                    detail="TripoSR only produces a mesh; use output_format='mesh'.",
+                    detail=f"{mesh_only[engine_type]} only produces a mesh; "
+                    "use output_format='mesh'.",
                 )
             result = await run_in_threadpool(engine.predict, image)
 
