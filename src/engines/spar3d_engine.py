@@ -210,11 +210,17 @@ class Spar3dEngine(AbstractEngine):
                     1.0,
                 ).astype(np.float32)
             else:
-                vc_vis = vis.to_color()
-                if getattr(vc_vis, "vertex_colors", None) is not None:
-                    vc = np.asarray(vc_vis.vertex_colors, dtype=np.float32)
-                    if len(vc) == len(verts):
-                        vcols = vc[:, :3] / (255.0 if vc.max() > 1.05 else 1.0)
+                # ENG-34: vis.to_color() may not exist on this mesh type.
+                # Probe for it and log rather than raising into the outer handler.
+                to_color = getattr(vis, "to_color", None)
+                if not callable(to_color):
+                    print("[SPAR3D] vertex colors: visual has no to_color(); skipping")
+                else:
+                    vc_vis = to_color()
+                    if getattr(vc_vis, "vertex_colors", None) is not None:
+                        vc = np.asarray(vc_vis.vertex_colors, dtype=np.float32)
+                        if len(vc) == len(verts):
+                            vcols = vc[:, :3] / (255.0 if vc.max() > 1.05 else 1.0)
 
             if vcols is not None and len(vcols) == len(verts):
                 # Repair unbaked black UV chart padding texels (brightness < 0.04) via 3D k-NN
