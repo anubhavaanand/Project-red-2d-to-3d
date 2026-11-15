@@ -114,6 +114,10 @@ class LGMEngine(AbstractEngine):
                     break
 
     def load_model(self, big: bool = True) -> None:
+        # Save xformers modules to restore after model loading
+        import sys
+        _saved_xformers = {k: v for k, v in sys.modules.items() if k.startswith('xformers')}
+        
         _install_lgm_xformers_shim()
         self._ensure_lgm_imports()
         from diffusers import DDIMScheduler
@@ -156,6 +160,14 @@ class LGMEngine(AbstractEngine):
             self.mv_pipeline.scheduler.config
         )
         self.rays_embeddings = self.model.prepare_default_rays(self.device)
+        
+        # Restore xformers modules after model loading
+        import sys
+        for k in list(sys.modules.keys()):
+            if k.startswith('xformers'):
+                del sys.modules[k]
+        sys.modules.update(_saved_xformers)
+        
         print("[LGM] Model loaded.")
 
     def predict(self, image: Image.Image, extract_mesh: bool = True) -> ReconstructionResult:
