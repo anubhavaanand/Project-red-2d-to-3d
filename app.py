@@ -57,6 +57,7 @@ from src.preprocessing.background_removal import BackgroundRemover
 from src.engines.triposr_engine import TriposrEngine
 from src.engines.trellis_engine import TrellisEngine
 from src.engines.lgm_engine import LGMEngine
+from src.engines.spar3d_engine import Spar3dEngine
 from src.export.glb_exporter import export_glb
 from src.export.ply_exporter import export_ply
 
@@ -88,6 +89,8 @@ def _get_engine(name: str):
             e = TrellisEngine(device=DEVICE, output_format="mesh", slat_steps=8, sparse_steps=8)
         elif name == "LGM":
             e = LGMEngine(device=DEVICE)
+        elif name == "SPAR3D":
+            e = Spar3dEngine(device=DEVICE)
         else:
             raise ValueError(f"Unknown engine: {name}")
         e.load_model()
@@ -255,7 +258,7 @@ def build_ui() -> gr.Blocks:
                     height=320,
                 )
                 engine_choice = gr.Radio(
-                    choices=["TripoSR", "TRELLIS", "LGM"],
+                    choices=["TripoSR", "TRELLIS", "LGM", "SPAR3D"],
                     value="TripoSR",
                     label="3D Engine",
                 )
