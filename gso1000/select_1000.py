@@ -13,14 +13,18 @@ Modes:
 
 Stdlib only; runs locally and on Kaggle.
 """
+
 from __future__ import annotations
 
 import argparse
 import json
 import random
 import sys
-from datetime import date
 from pathlib import Path
+
+# DATA-01: use the shared object-id parser rather than a local variant.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from src.data.object_ids import load_object_ids  # noqa: E402
 
 SEED = 42
 TARGET = 1000
@@ -56,7 +60,7 @@ def load_pool(catalog_path: Path) -> list[str]:
 
 
 def load_forced(handpicked_path: Path, pool: set[str]) -> list[str]:
-    hp = [l.strip() for l in handpicked_path.read_text(encoding="utf-8").splitlines() if l.strip()]
+    hp = load_object_ids(handpicked_path)
     missing = [h for h in hp if h not in pool]
     if missing:
         raise SystemExit(f"[selector] handpicked objects absent from pool: {missing}")
@@ -80,7 +84,9 @@ def valid_ids_from_report(report_path: Path) -> tuple[set[str], dict[str, dict]]
     return ok, meta
 
 
-def select(pool: list[str], valid: set[str], forced: list[str], seed: int) -> tuple[list[str], dict]:
+def select(
+    pool: list[str], valid: set[str], forced: list[str], seed: int
+) -> tuple[list[str], dict]:
     forced_valid = sorted(f for f in forced if f in valid)
     forced_dropped = sorted(f for f in forced if f not in valid)
     remaining = sorted(set(valid) - set(forced_valid))
@@ -123,8 +129,12 @@ def main() -> None:
     repo = here.parent
     ap.add_argument("--catalog", type=Path, default=repo / "gso_catalog.txt")
     ap.add_argument("--handpicked", type=Path, default=repo / "handpicked.txt")
-    ap.add_argument("--validation-report", type=Path, default=None,
-                    help="validation_report.json from kernel K0; omit for dry-run preview")
+    ap.add_argument(
+        "--validation-report",
+        type=Path,
+        default=None,
+        help="validation_report.json from kernel K0; omit for dry-run preview",
+    )
     ap.add_argument("--out", type=Path, default=None)
     ap.add_argument("--seed", type=int, default=SEED)
     args = ap.parse_args()
@@ -165,14 +175,18 @@ def main() -> None:
         doc["validation_uncovered_ids"] = uncovered  # absent from report -> excluded
     out.write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
 
-    print(f"[selector] mode={mode} pool={stats['pool']} valid={stats['validated_ok']} "
-          f"forced={stats['forced_valid']} fill={stats['fill']} final={stats['final']}")
+    print(
+        f"[selector] mode={mode} pool={stats['pool']} valid={stats['validated_ok']} "
+        f"forced={stats['forced_valid']} fill={stats['fill']} final={stats['final']}"
+    )
     if extras["forced_dropped_ids"]:
         print(f"[selector] forced dropped (failed validation): {extras['forced_dropped_ids']}")
     print(f"[selector] wrote {out} ({len(manifest)} objects)")
     if mode == "preview":
-        print("[selector] PREVIEW ONLY - assumes whole pool validates; "
-              "run kernel K0 and re-run with --validation-report for the final manifest")
+        print(
+            "[selector] PREVIEW ONLY - assumes whole pool validates; "
+            "run kernel K0 and re-run with --validation-report for the final manifest"
+        )
 
 
 if __name__ == "__main__":

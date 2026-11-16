@@ -15,7 +15,7 @@ dependencies = [
 ]
 
 [tool.setuptools]
-packages = ["src", "src.api", "src.engines", "src.evaluation", "src.export", "src.preprocessing"]
+packages = ["src", "src.api", "src.data", "src.engines", "src.evaluation", "src.export", "src.preprocessing"]
 
 [tool.ruff]
 line-length = 100
