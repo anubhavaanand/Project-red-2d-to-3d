@@ -337,6 +337,21 @@ def best_engine(sub, column: str, *, largest: bool = False):
     if series.empty:
         return None
     return series.idxmax() if largest else series.idxmin()
+def by_engine(df, sample_id: str):
+    """Index a sample's rows by engine, asserting one row per engine.
+
+    TOOL-11: set_index("engine") then .loc[eng] returns a Series when a
+    sample_id has duplicate engine rows, so the later f-string silently got a
+    Series instead of a float. Fail loudly instead.
+    """
+    sub = df[df["sample_id"] == sample_id]
+    dupes = sub["engine"][sub["engine"].duplicated()].unique().tolist()
+    if dupes:
+        raise SystemExit(
+            f"sample_id {sample_id!r} has duplicate engine row(s) {dupes}; "
+            "the results are ambiguous and figures cannot be built"
+        )
+    return sub.set_index("engine")
 
 
 def main():
@@ -395,7 +410,7 @@ def main():
 
     for r_i, (sid, label) in enumerate(CANONICAL_10):
         ry = top_header_h + r_i * (cell + pad_y)
-        sub = df[df["sample_id"] == sid].set_index("engine")
+        sub = by_engine(df, sid)
         best_cd_eng = best_engine(sub, "chamfer_distance")
         best_f1_eng = best_engine(sub, "f_score_0.1", largest=True)
 
@@ -548,7 +563,7 @@ def main():
         )
 
         bx = base_x + 4 * (m_cell + m_gap) + 6
-        sub = df[df["sample_id"] == sid].set_index("engine").reindex(ENGINES)
+        sub = by_engine(df, sid).reindex(ENGINES)
         for ei, eng in enumerate(ENGINES):
             by = base_y + 12 + ei * 38
             f_val = float(sub.loc[eng, "f_score_0.1"])
@@ -600,7 +615,7 @@ def main():
 
     for r_i, (sid, label) in enumerate(showcase_3):
         ry = b_top + r_i * (b_cell + b_pad_y)
-        sub = df[df["sample_id"] == sid].set_index("engine")
+        sub = by_engine(df, sid)
         best_cd_eng = best_engine(sub, "chamfer_distance")
         best_f1_eng = best_engine(sub, "f_score_0.1", largest=True)
 
