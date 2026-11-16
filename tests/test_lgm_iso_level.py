@@ -33,8 +33,7 @@ class TestSelection:
     def test_fixed_takes_precedence(self):
         src = _engine_source()
         block = src[
-            src.index("if self.fixed_iso_level is not None") :
-            src.index("# Always use skimage")
+            src.index("if self.fixed_iso_level is not None") : src.index("# Always use skimage")
         ]
         assert "iso = float(self.fixed_iso_level)" in block
 

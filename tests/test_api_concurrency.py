@@ -45,7 +45,9 @@ def _build(semaphore_size=2, timeout_s=0.2):
 class TestInferenceConcurrency:
     def test_concurrency_is_capped(self):
         async def scenario():
-            run = _build(semaphore_size=2)
+            # generous timeout: this test measures concurrency, not timeouts,
+            # and the 0.2s default is too tight on a loaded CI runner
+            run = _build(semaphore_size=2, timeout_s=30.0)
             active = 0
             peak = 0
             lock = threading.Lock()
@@ -74,7 +76,7 @@ class TestInferenceConcurrency:
 
     def test_single_slot_serialises_everything(self):
         async def scenario():
-            run = _build(semaphore_size=1)
+            run = _build(semaphore_size=1, timeout_s=30.0)
             active = 0
             peak = 0
             lock = threading.Lock()
