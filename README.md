@@ -149,11 +149,11 @@ See [results/README.md](results/README.md) for the canonical CSV/TeX files and t
   author = {Anand, Anubhav},
   year   = {2026},
   note   = {Manuscript under review},
-  url    = {https://github.com/anubhavaanand/image-to-3d}
+  url    = {https://github.com/anubhavaanand/Project-red-2d-to-3d}
 }
 ```
 
-This repository is tagged [`v1.0.0`](https://github.com/anubhavaanand/image-to-3d/releases/tag/v1.0.0). The measurements were produced at code commit `09131e61568d98401e71861bc27fdce6637b2f20`; use that SHA, not the Kaggle kernel version number, when referring to the exact run.
+This repository is tagged [`v1.0.0`](https://github.com/anubhavaanand/Project-red-2d-to-3d/releases/tag/v1.0.0). The measurements were produced at code commit `09131e61568d98401e71861bc27fdce6637b2f20`; use that SHA, not the Kaggle kernel version number, when referring to the exact run.
 
 ## License and model terms
 
