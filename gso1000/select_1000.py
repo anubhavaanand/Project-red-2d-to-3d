@@ -93,17 +93,29 @@ def select(
     fill_n = TARGET - len(forced_valid)
 
     if fill_n <= 0:
-        manifest = sorted(forced_valid)[:TARGET]
+        # TOOL-16: slicing to TARGET silently dropped forced objects. Keep the
+        # overflow visible instead of losing it without a trace.
+        ordered_forced = sorted(forced_valid)
+        manifest = ordered_forced[:TARGET]
+        forced_overflow = ordered_forced[TARGET:]
+        if forced_overflow:
+            print(
+                f"[select] WARNING: {len(forced_overflow)} forced object(s) exceed "
+                f"TARGET={TARGET} and were dropped: {forced_overflow[:10]}"
+                + (" ..." if len(forced_overflow) > 10 else "")
+            )
         fill: list[str] = []
         dropped_sampling: list[str] = []
     elif len(remaining) >= fill_n:
         rng = random.Random(seed)
         fill = sorted(rng.sample(remaining, fill_n))
         dropped_sampling = sorted(set(remaining) - set(fill))
+        forced_overflow: list[str] = []
         manifest = sorted(set(forced_valid) | set(fill))
     else:
         fill = remaining  # valid pool smaller than target: take everything
         dropped_sampling = []
+        forced_overflow: list[str] = []
         manifest = sorted(set(forced_valid) | set(fill))
 
     stats = {
@@ -115,10 +127,12 @@ def select(
         "dropped_validation": len(pool) - len(valid),
         "dropped_sampling": len(dropped_sampling),
         "forced_dropped_invalid": len(forced_dropped),
+        "forced_overflow": len(forced_overflow),
     }
     extras = {
         "forced_dropped_ids": forced_dropped,
         "dropped_sampling_ids": dropped_sampling,
+        "forced_overflow_ids": forced_overflow,
     }
     return manifest, stats, extras
 
