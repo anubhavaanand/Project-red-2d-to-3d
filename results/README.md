@@ -13,6 +13,19 @@ This directory holds the measured benchmark data. Keep the canonical files; trea
 
 Both CSVs are derived from the same final 400 evaluations; the 40-row file is a filtered canonical-10 subset. They are the source of every number in the manuscript.
 
+## Mesh manifest
+
+`mesh_manifest.csv` lists every exported `*_mesh.obj`: 400 rows (100 objects × 4 engines) with size, SHA-256, vertex and face counts.
+
+**The `path` column is relative to the Kaggle run root, which is not in this repository.** Paths look like `batch1_100obj_v35/outputs/...`, and neither `batch1_100obj_v35/` nor `batch2_100obj_v35/` exists here. To resolve a path, download the run tree and join it:
+
+```python
+run_root = Path("/path/to/kaggle_runs")   # contains batch1_100obj_v35/ and batch2_100obj_v35/
+mesh = run_root / row["path"]
+```
+
+The `run_root` column names the top-level directory each row belongs to, so the expected root is explicit without opening the CSV.
+
 ## Provenance of the n = 100 block
 
 Both final kernels ran at code commit `09131e61568d98401e71861bc27fdce6637b2f20` (each output directory contains a `code_sha.txt`). The run directories are named `batch1_100obj_v35` and `batch2_100obj_v35`; both produced 100 rows per engine (400 unique evaluations, 0 failures). The 10-object block in the paper is the canonical subset of those 400 rows, not a separate 40-evaluation run.
