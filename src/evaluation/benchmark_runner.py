@@ -587,6 +587,20 @@ def render_novel_view_same_bg(
         else:
             verts = raw_v
 
+        # EVAL-04: mesh vertices are normalised by _normalize_vertices_robust
+        # (bbox centre + 99.5th-percentile radius) while sampled points are
+        # re-normalised by normalize_point_cloud (mean centre + 99.5th-percentile
+        # radius). The centres differ, so the rendered mesh and the scored cloud
+        # are not exactly the same scale. Assert the rendered mesh landed in a
+        # sane range rather than letting a mis-scaled render pass silently.
+        if len(verts):
+            render_radius = float(np.linalg.norm(verts - verts.mean(axis=0), axis=1).max())
+            if render_radius > 10.0:
+                print(
+                    f"[render] WARNING: mesh radius {render_radius:.2f} is far "
+                    "outside the unit sphere; render may be mis-scaled"
+                )
+
         uv_coords = getattr(mesh, "uv_coords", None)
         tex_map = getattr(mesh, "texture_map", None)
         use_native_uv = (
