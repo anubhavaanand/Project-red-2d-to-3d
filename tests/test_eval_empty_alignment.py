@@ -72,7 +72,7 @@ class TestSourceContract:
     def test_guard_precedes_sub_n(self):
         src = RUNNER.read_text()
         assert src.index("if len(pred_pts) == 0 or len(gt) == 0:") < src.index(
-            "sub_n = min(2048, len(pred_pts), len(gt))"
+            "sub_n = min(subsample_points, len(pred_pts), len(gt))"
         )
 
     def test_runner_records_failures_per_sample(self):

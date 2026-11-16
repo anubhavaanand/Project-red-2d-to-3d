@@ -52,6 +52,12 @@ class GSOSample:
     gt_colors: np.ndarray | None = None
 
 
+# EVAL-13: the ICP search subsamples both clouds to this many points, while the
+# reported metrics use 10,000. Exposed so it can be raised or documented; the
+# default reproduces the published v1.0 numbers exactly.
+ALIGNMENT_SUBSAMPLE_POINTS = 2048
+
+
 class EmptyAlignmentError(RuntimeError):
     """EVAL-14: raised when alignment cannot run because an input is empty."""
 
@@ -384,6 +390,7 @@ def align_mesh_to_gt(
     num_points: int = 10000,
     n_iter: int = 5,
     gt_colors: np.ndarray | None = None,
+    subsample_points: int = ALIGNMENT_SUBSAMPLE_POINTS,
 ) -> tuple[Mesh3D, np.ndarray]:
     import trimesh
     from scipy.spatial import cKDTree
@@ -408,7 +415,7 @@ def align_mesh_to_gt(
         raise EmptyAlignmentError(
             f"cannot align: empty input (pred_pts={len(pred_pts)}, gt={len(gt)})"
         )
-    sub_n = min(2048, len(pred_pts), len(gt))
+    sub_n = min(subsample_points, len(pred_pts), len(gt))
     rng = np.random.default_rng(0)
     p_idx = rng.choice(len(pred_pts), sub_n, replace=False)
     g_idx = rng.choice(len(gt), sub_n, replace=False)
@@ -769,6 +776,7 @@ class BenchmarkRunner:
         resume_json_path: str | Path | None = None,
         save_mesh_limit: int = 100,
         max_wall_minutes: float | None = None,
+        alignment_subsample_points: int = ALIGNMENT_SUBSAMPLE_POINTS,
     ):
         self.dataset_path = Path(dataset_path)
         self.engines = engines
@@ -780,6 +788,8 @@ class BenchmarkRunner:
         self.bg_remover = BackgroundRemover()
         self.save_mesh_limit = save_mesh_limit
         self.max_wall_minutes = max_wall_minutes
+        # EVAL-13: exposed so the protocol's ICP subsample is configurable.
+        self.alignment_subsample_points = int(alignment_subsample_points)
         self._t_runner_start = time.perf_counter()
         self._stop_requested = False
         self._meshes_saved = 0
@@ -935,6 +945,7 @@ class BenchmarkRunner:
                             sample.gt_points,
                             self.num_points,
                             gt_colors=sample.gt_colors,
+                            subsample_points=self.alignment_subsample_points,
                         )
                         row["chamfer_distance"] = compute_chamfer_distance(
                             pred_pts, sample.gt_points
