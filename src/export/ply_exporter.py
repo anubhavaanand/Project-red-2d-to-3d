@@ -86,14 +86,10 @@ def export_ply(gaussians: GaussianCloud, filepath: str) -> None:
         "end_header\n",
     ]
 
+    # EXP-10: build the body with numpy and write once. One f.write per
+    # Gaussian took seconds for 65k-500k splats and blocked the API loop.
+    normals = np.zeros((n, 3), dtype=np.float32)
+    rows = np.concatenate([pos, normals, sh, opacities.reshape(n, 1), scales, rot], axis=1)
     with open(filepath, "w") as f:
         f.write("\n".join(header))
-        for i in range(n):
-            f.write(
-                f"{pos[i, 0]:.6f} {pos[i, 1]:.6f} {pos[i, 2]:.6f} "
-                f"0.0 0.0 0.0 "
-                f"{sh[i, 0]:.6f} {sh[i, 1]:.6f} {sh[i, 2]:.6f} "
-                f"{opacities[i, 0]:.6f} "
-                f"{scales[i, 0]:.6f} {scales[i, 1]:.6f} {scales[i, 2]:.6f} "
-                f"{rot[i, 0]:.6f} {rot[i, 1]:.6f} {rot[i, 2]:.6f} {rot[i, 3]:.6f}\n"
-            )
+        np.savetxt(f, rows, fmt="%.6f", delimiter=" ")
