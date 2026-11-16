@@ -2,12 +2,19 @@ import numpy as np
 import trimesh
 
 from ..engines.base import Mesh3D
+from ._validate import require_finite
 
 
 def export_glb(mesh: Mesh3D, filepath: str) -> None:
     """Exports a Mesh3D object to a GLB file."""
     if mesh is None:
         raise ValueError("Mesh3D is None, cannot export.")
+
+    # EXP-04: fail fast on non-finite geometry rather than writing a broken file.
+    require_finite("vertices", mesh.vertices)
+    require_finite("faces", mesh.faces)
+    if mesh.vertex_colors is not None:
+        require_finite("vertex_colors", mesh.vertex_colors)
 
     # Prepare vertex colors if available
     vertex_colors = None
