@@ -97,6 +97,8 @@ class LGMEngine(AbstractEngine):
         big: bool = True,
         opacity_thresholds: tuple = DEFAULT_OPACITY_THRESHOLDS,
         min_foreground_points: int = DEFAULT_MIN_FOREGROUND_POINTS,
+        iso_percentile: float = 48.0,
+        fixed_iso_level: float | None = None,
     ):
         self.device = device
         self.mv_guidance_scale = mv_guidance_scale
@@ -109,6 +111,10 @@ class LGMEngine(AbstractEngine):
         # published numbers).
         self.opacity_thresholds = tuple(opacity_thresholds)
         self.min_foreground_points = int(min_foreground_points)
+        # ENG-18: per-object percentile (legacy default) or a fixed iso level.
+        self.iso_percentile = float(iso_percentile)
+        self.fixed_iso_level = None if fixed_iso_level is None else float(fixed_iso_level)
+        self.iso_rule = None
         self.last_opacity_threshold = None
         self.model = None
         self.mv_pipeline = None
@@ -319,6 +325,7 @@ class LGMEngine(AbstractEngine):
                 "face_count": len(mesh_out.faces) if mesh_out is not None else 0,
                 "has_vertex_colors": (mesh_out is not None and mesh_out.vertex_colors is not None),
                 "mesh_error": mesh_error,
+                "iso_rule": getattr(self, "iso_rule", None),
             },
         )
 
@@ -389,7 +396,16 @@ class LGMEngine(AbstractEngine):
                 raise LgmMeshExtractionError(
                     "No foreground Gaussians above the opacity floor; nothing to mesh"
                 )
-            iso = float(np.percentile(nonzero, 48))
+            # ENG-18: the iso level was always the per-object 48th percentile,
+            # so surface position was not comparable across objects. A fixed iso
+            # changes the geometry, so it is opt-in; the default keeps the
+            # per-object percentile that produced the published numbers.
+            if self.fixed_iso_level is not None:
+                iso = float(self.fixed_iso_level)
+                self.iso_rule = f"fixed ({iso:.4f})"
+            else:
+                iso = float(np.percentile(nonzero, self.iso_percentile))
+                self.iso_rule = f"percentile {self.iso_percentile:g} of non-zero density"
 
             # Always use skimage.measure.marching_cubes on CPU grid_np so vertex
             # coordinates stay in (ix, iy, iz) = (x, y, z) order without axis reversal!
