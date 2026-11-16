@@ -51,7 +51,7 @@ class TestParsing:
 
 class TestSingleImplementation:
     def test_selector_uses_it(self):
-        src = (ENGINES := Path(__file__).parent.parent / "gso1000" / "select_1000.py").read_text()
+        src = (Path(__file__).parent.parent / "gso1000" / "select_1000.py").read_text()
         assert "load_object_ids(handpicked_path)" in src
         assert "[l.strip() for l in handpicked_path" not in src
 
