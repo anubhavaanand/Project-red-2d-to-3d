@@ -49,6 +49,17 @@ class TrellisOutputError(RuntimeError):
     """ENG-22: raised when the TRELLIS pipeline returns an unexpected payload."""
 
 
+def _run_on_device(model, slat, dev):
+    """Call ``model(slat)``, inside a CUDA device context only when needed.
+
+    ENG-41/ENG-47: torch.cuda.device(dev) raises for a CPU device.
+    """
+    if str(dev).startswith("cuda"):
+        with torch.cuda.device(dev):
+            return model(slat)
+    return model(slat)
+
+
 def _first_of(value, label: str):
     """Return the first element of a pipeline output, whatever container it is.
 
@@ -240,8 +251,7 @@ class TrellisEngine(AbstractEngine):
                         p.models["slat_decoder_mesh"].to("cpu")
                         free_cuda_cache()
                         p.models["slat_decoder_gs"].to(self.dev)
-                        with torch.cuda.device(self.dev):
-                            out_gs_color = p.models["slat_decoder_gs"](slat)
+                        out_gs_color = _run_on_device(p.models["slat_decoder_gs"], slat, self.dev)
                     except Exception as gs_err:
                         print(f"[TRELLIS] GS color decoder fallback ({gs_err})")
                     finally:
@@ -261,8 +271,7 @@ class TrellisEngine(AbstractEngine):
                 gc.collect()
                 try:
                     p.models["slat_decoder_gs"].to(self.dev)
-                    with torch.cuda.device(self.dev):
-                        out_gs = p.models["slat_decoder_gs"](slat)
+                    out_gs = _run_on_device(p.models["slat_decoder_gs"], slat, self.dev)
                     p.models["slat_decoder_gs"].to("cpu")
                     outputs = {"gaussian": out_gs}
                     decode_mode = "gaussian"
