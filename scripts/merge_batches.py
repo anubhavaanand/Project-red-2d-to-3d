@@ -7,6 +7,7 @@ Merge Batch 1 (TripoSR + LGM) and Batch 2 (TRELLIS + SPAR3D) results into:
 """
 
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -25,8 +26,18 @@ _COMPARED_FIELDS = (
 )
 
 
+def _finite(value) -> bool:
+    """True when value is a real, finite number."""
+    if value is None:
+        return False
+    try:
+        return math.isfinite(float(value))
+    except (TypeError, ValueError):
+        return False
+
+
 def _differs(a, b) -> bool:
-    """True when two duplicate rows disagree on a metric that matters."""
+    """True when value is a real, finite number."""
     for field in _COMPARED_FIELDS:
         va, vb = a.get(field), b.get(field)
         if va is None or vb is None:
@@ -52,7 +63,10 @@ def merge_all(search_dirs):
                 data = json.load(open(p))
                 for r in data:
                     key = (r.get("engine"), r.get("sample_id"))
-                    if "chamfer_distance" not in r:
+                    # TOOL-10: require a finite chamfer_distance. Only checking
+                    # for the key let failed rows (NaN/None) into the summary,
+                    # mixing successful and failed runs in the means.
+                    if not _finite(r.get("chamfer_distance")):
                         continue
                     if key in seen:
                         # TOOL-09: keeping the first row made the winner depend on
@@ -102,6 +116,7 @@ def merge_all(search_dirs):
     except ImportError as e:
         # jinja2 is only needed for DataFrame.to_latex; the CSV is already written.
         print(f"\nSaved CSV to {out_dir} (skipped LaTeX table: {e})")
+
 
 
 if __name__ == "__main__":
