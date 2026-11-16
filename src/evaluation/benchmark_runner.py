@@ -20,6 +20,7 @@ import pandas as pd
 import torch
 from PIL import Image
 
+from ..data.object_ids import load_object_ids
 from ..engines.base import AbstractEngine, Mesh3D, ReconstructionResult
 from ..preprocessing.background_removal import BackgroundRemover
 from .metrics import (
@@ -224,10 +225,9 @@ def load_gso_samples(
             handpicked_path = Path("/home/anubhavanand/Desktop/reasearch papers/handpicked.txt")
 
         if handpicked_path.exists():
-            with open(handpicked_path) as f:
-                object_ids = [
-                    line.strip() for line in f if line.strip() and not line.startswith("#")
-                ]
+            # DATA-01: one shared parser, so '#' comments and blank lines are
+            # handled identically here and in the selector.
+            object_ids = load_object_ids(handpicked_path)
             _missing = [o for o in object_ids if not (root / o).is_dir()]
             if _missing:
                 print(
