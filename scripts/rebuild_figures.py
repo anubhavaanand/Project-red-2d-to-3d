@@ -325,6 +325,20 @@ def engine_means(df) -> dict:
     return {"lat": lat, "vram": vram}
 
 
+def best_engine(sub, column: str, *, largest: bool = False):
+    """Index of the best engine for ``column``, or None if no finite value exists.
+
+    TOOL-05: idxmin/idxmax raise on an all-NaN column, so a single failed
+    subset aborted the whole figure build.
+    """
+    if column not in sub.columns:
+        return None
+    series = sub[column].replace([np.inf, -np.inf], np.nan).dropna()
+    if series.empty:
+        return None
+    return series.idxmax() if largest else series.idxmin()
+
+
 def main():
     df = pd.read_csv(CSV_PATH)
     gt_views = {}
@@ -382,8 +396,8 @@ def main():
     for r_i, (sid, label) in enumerate(CANONICAL_10):
         ry = top_header_h + r_i * (cell + pad_y)
         sub = df[df["sample_id"] == sid].set_index("engine")
-        best_cd_eng = sub["chamfer_distance"].idxmin()
-        best_f1_eng = sub["f_score_0.1"].idxmax()
+        best_cd_eng = best_engine(sub, "chamfer_distance")
+        best_f1_eng = best_engine(sub, "f_score_0.1", largest=True)
 
         draw1.text((14, ry + cell // 2 - 10), label, font=f_row, fill=(15, 23, 42))
 
@@ -587,8 +601,8 @@ def main():
     for r_i, (sid, label) in enumerate(showcase_3):
         ry = b_top + r_i * (b_cell + b_pad_y)
         sub = df[df["sample_id"] == sid].set_index("engine")
-        best_cd_eng = sub["chamfer_distance"].idxmin()
-        best_f1_eng = sub["f_score_0.1"].idxmax()
+        best_cd_eng = best_engine(sub, "chamfer_distance")
+        best_f1_eng = best_engine(sub, "f_score_0.1", largest=True)
 
         draw2.text(
             (40, ry + b_cell // 2 - 10), label, font=get_font(15, bold=True), fill=(15, 23, 42)
