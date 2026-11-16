@@ -36,6 +36,14 @@ from .base import AbstractEngine, GaussianCloud, Mesh3D, ReconstructionResult
 # consumes mesh and gaussian, so only those are accepted.
 OutputFormat = Literal["mesh", "gaussian"]
 
+# Rx(-90): TRELLIS's Blender Z-up -> OpenGL Y-up, matching the mesh path.
+_RX_NEG90 = np.array([[1.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, -1.0, 0.0]], dtype=np.float32)
+
+# ENG-25: opt in with TRELLIS_ROTATE_GAUSSIANS=1 to put the Gaussian cloud in
+# the same OpenGL Y-up frame as the mesh. Default False preserves the legacy
+# (unrotated) output that produced the published numbers.
+_ROTATE_GAUSSIANS_TO_MATCH_MESH = os.environ.get("TRELLIS_ROTATE_GAUSSIANS", "0") == "1"
+
 
 class TrellisOutputError(RuntimeError):
     """ENG-22: raised when the TRELLIS pipeline returns an unexpected payload."""
@@ -352,10 +360,7 @@ class TrellisEngine(AbstractEngine):
                     print(f"[TRELLIS] GS color transfer warning: {gce}")
 
             # Convert Blender Z-up (x, y, z) -> OpenGL Y-up (x, z, -y) via Rx(-90)
-            rx_neg90 = np.array(
-                [[1.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, -1.0, 0.0]], dtype=np.float32
-            )
-            verts = verts_raw @ rx_neg90.T
+            verts = verts_raw @ _RX_NEG90.T
 
             mesh = Mesh3D(vertices=verts, faces=faces, vertex_colors=vcols)
             # ENG-42: validate at the source rather than in export/rendering.
@@ -372,8 +377,14 @@ class TrellisEngine(AbstractEngine):
             return ReconstructionResult(mesh=mesh, metadata=metadata)
 
         gs = outputs["gaussian"][0]
+        gs_pos = gs.get_xyz.detach().cpu().numpy().astype(np.float32)
+        if _ROTATE_GAUSSIANS_TO_MATCH_MESH:
+            # ENG-25: the mesh is rotated Rx(-90) into OpenGL Y-up but the
+            # Gaussian cloud was left in TRELLIS's Z-up frame. Opt in to align
+            # them; default keeps the legacy (unrotated) output.
+            gs_pos = gs_pos @ _RX_NEG90.T
         gaussians = GaussianCloud(
-            positions=gs.get_xyz.detach().cpu().numpy().astype(np.float32),
+            positions=gs_pos,
             scales=gs.get_scaling.detach().cpu().numpy().astype(np.float32),
             rotations=gs.get_rotation.detach().cpu().numpy().astype(np.float32),
             opacities=gs.get_opacity.detach().cpu().numpy().astype(np.float32),
