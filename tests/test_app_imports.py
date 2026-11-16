@@ -3,7 +3,11 @@
 import ast
 from pathlib import Path
 
-import tomllib
+# tomllib is 3.11+; 3.10 needs the tomli backport (CI tests 3.10).
+try:
+    import tomllib
+except ModuleNotFoundError:  # pragma: no cover - Python 3.10
+    import tomli as tomllib
 
 APP_PY = Path(__file__).parent.parent / "app.py"
 PYPROJECT = Path(__file__).parent.parent / "pyproject.toml"
