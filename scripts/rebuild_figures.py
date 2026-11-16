@@ -235,7 +235,9 @@ def render_gt_views_for_object(sid: str, res: int = 260) -> dict:
     return out
 
 
-def composite_with_inset(img_main: Image.Image, img_inset: Image.Image, inset_frac: float = 0.30) -> Image.Image:
+def composite_with_inset(
+    img_main: Image.Image, img_inset: Image.Image, inset_frac: float = 0.30
+) -> Image.Image:
     base = img_main.copy().convert("RGB")
     w, h = base.size
     iw = int(round(w * inset_frac))
@@ -292,10 +294,35 @@ def load_framed_image(path: Path, resolution: int = 260) -> Image.Image:
     return comp.resize((resolution, resolution), Image.LANCZOS)
 
 
-def draw_centered_text(draw: ImageDraw.ImageDraw, box_x: int, box_w: int, y: int, text: str, font, fill):
+def draw_centered_text(
+    draw: ImageDraw.ImageDraw, box_x: int, box_w: int, y: int, text: str, font, fill
+):
     bbox = draw.textbbox((0, 0), text, font=font)
     tw = bbox[2] - bbox[0]
     draw.text((box_x + (box_w - tw) // 2, y), text, font=font, fill=fill)
+
+
+REQUIRED_ENGINES = ("TripoSR", "LGM", "SPAR3D", "TRELLIS")
+
+
+def engine_means(df) -> dict:
+    """Mean latency and VRAM per engine, failing clearly on a missing engine.
+
+    TOOL-04: the figure code indexed lat['TripoSR'] and vram['LGM'] directly,
+    so a partial run raised a bare KeyError naming only the engine.
+    """
+    missing = [e for e in REQUIRED_ENGINES if e not in set(df["engine"].unique())]
+    if missing:
+        found = sorted(df["engine"].unique())
+        raise SystemExit(
+            f"Cannot build figures: missing engine(s) {missing}. "
+            f"Found: {found}. Re-run the full benchmark before rebuilding."
+        )
+
+    grouped = df.groupby("engine")
+    lat = grouped["latency_s"].mean()
+    vram = grouped["vram_peak_gb"].mean()
+    return {"lat": lat, "vram": vram}
 
 
 def main():
@@ -337,8 +364,8 @@ def main():
         (15, 23, 42),
     )
 
-    lat = df.groupby("engine")["latency_s"].mean()
-    vram = df.groupby("engine")["vram_peak_gb"].mean()
+    _means = engine_means(df)
+    lat, vram = _means["lat"], _means["vram"]
     col_headers = [
         ("Input Image (2D)", "1024px RGBA Centered"),
         ("Ground Truth (3D)", "Watertight GSO Scan"),
@@ -366,16 +393,24 @@ def main():
         inp_img = load_framed_image(inp_p, resolution=cell)
         canvas1.paste(inp_img, (c0_x, ry))
         draw1.rectangle([c0_x, ry, c0_x + cell, ry + cell], outline=(203, 213, 225), width=2)
-        draw_centered_text(draw1, c0_x, cell, ry + cell + 5, "Single-View RGB Input", f_cap, (100, 116, 139))
+        draw_centered_text(
+            draw1, c0_x, cell, ry + cell + 5, "Single-View RGB Input", f_cap, (100, 116, 139)
+        )
 
         # Col 1: GT 3D Scan + Normals
         c1_x = left_label_w + 1 * (cell + pad_x)
         gt_nov_p = ENGINE_QUAL_DIRS["TRELLIS"] / sid / "gt_novel.png"
-        gt_rgb = load_framed_image(gt_nov_p, resolution=cell) if gt_nov_p.exists() else gt_views[sid]["az65"]
+        gt_rgb = (
+            load_framed_image(gt_nov_p, resolution=cell)
+            if gt_nov_p.exists()
+            else gt_views[sid]["az65"]
+        )
         gt_comp = composite_with_inset(gt_rgb, gt_views[sid]["norm65"])
         canvas1.paste(gt_comp, (c1_x, ry))
         draw1.rectangle([c1_x, ry, c1_x + cell, ry + cell], outline=(148, 163, 184), width=2)
-        draw_centered_text(draw1, c1_x, cell, ry + cell + 5, "GT Mesh + 3D Normals", f_cap, (71, 85, 105))
+        draw_centered_text(
+            draw1, c1_x, cell, ry + cell + 5, "GT Mesh + 3D Normals", f_cap, (71, 85, 105)
+        )
 
         # Cols 2-5: 4 Engines
         for e_i, eng in enumerate(ENGINES):
@@ -389,7 +424,9 @@ def main():
             border_col = (13, 148, 136) if is_best else (203, 213, 225)
             border_w = 3 if is_best else 2
             draw1.rectangle([cx, ry, cx + cell, ry + cell], outline=border_col, width=border_w)
-            cap = f"CD:{r['chamfer_distance']:.3f} | F@.1:{r['f_score_0.1']:.2f} | {r['psnr']:.1f}dB"
+            cap = (
+                f"CD:{r['chamfer_distance']:.3f} | F@.1:{r['f_score_0.1']:.2f} | {r['psnr']:.1f}dB"
+            )
             draw_centered_text(
                 draw1,
                 cx,
@@ -444,8 +481,18 @@ def main():
     for mc in range(2):
         base_x = 22 + mc * (macro_w + 20)
         for vi, vt in enumerate(view_titles):
-            draw_centered_text(draw2, base_x + vi * (m_cell + m_gap), m_cell, 46, vt, f_hdr, (30, 41, 59))
-        draw_centered_text(draw2, base_x + 4 * (m_cell + m_gap), bar_w, 46, "4-Engine F@0.1 (↑) & CD (↓)", f_hdr, (30, 41, 59))
+            draw_centered_text(
+                draw2, base_x + vi * (m_cell + m_gap), m_cell, 46, vt, f_hdr, (30, 41, 59)
+            )
+        draw_centered_text(
+            draw2,
+            base_x + 4 * (m_cell + m_gap),
+            bar_w,
+            46,
+            "4-Engine F@0.1 (↑) & CD (↓)",
+            f_hdr,
+            (30, 41, 59),
+        )
 
     for idx, (sid, label) in enumerate(CANONICAL_10):
         mr = idx // 2
@@ -454,7 +501,12 @@ def main():
         base_y = 74 + mr * macro_h
 
         draw2.rectangle(
-            [base_x - 6, base_y - 4, base_x + 4 * (m_cell + m_gap) + bar_w + 8, base_y + m_cell + 24],
+            [
+                base_x - 6,
+                base_y - 4,
+                base_x + 4 * (m_cell + m_gap) + bar_w + 8,
+                base_y + m_cell + 24,
+            ],
             outline=(226, 232, 240),
             fill=(250, 251, 253),
             width=1,
@@ -470,11 +522,13 @@ def main():
         for vi, im in enumerate(imgs):
             vx = base_x + vi * (m_cell + m_gap)
             canvas2.paste(im, (vx, base_y))
-            draw2.rectangle([vx, base_y, vx + m_cell, base_y + m_cell], outline=(203, 213, 225), width=1)
+            draw2.rectangle(
+                [vx, base_y, vx + m_cell, base_y + m_cell], outline=(203, 213, 225), width=1
+            )
 
         draw2.text(
             (base_x + 4, base_y + m_cell + 4),
-            f"#{idx+1:02d}  {label} ({sid[:28]})",
+            f"#{idx + 1:02d}  {label} ({sid[:28]})",
             font=f_obj,
             fill=(15, 23, 42),
         )
@@ -489,8 +543,12 @@ def main():
             bar_start = bx + 62
             bar_max_px = 82
             bar_px = max(4, int(round(f_val * bar_max_px)))
-            draw2.rectangle([bar_start, by + 2, bar_start + bar_max_px, by + 16], fill=(226, 232, 240))
-            draw2.rectangle([bar_start, by + 2, bar_start + bar_px, by + 16], fill=ENGINE_COLORS[eng])
+            draw2.rectangle(
+                [bar_start, by + 2, bar_start + bar_max_px, by + 16], fill=(226, 232, 240)
+            )
+            draw2.rectangle(
+                [bar_start, by + 2, bar_start + bar_px, by + 16], fill=ENGINE_COLORS[eng]
+            )
             draw2.text(
                 (bar_start + bar_max_px + 6, by),
                 f"{f_val:.2f} ({c_val:.2f})",
@@ -532,25 +590,35 @@ def main():
         best_cd_eng = sub["chamfer_distance"].idxmin()
         best_f1_eng = sub["f_score_0.1"].idxmax()
 
-        draw2.text((40, ry + b_cell // 2 - 10), label, font=get_font(15, bold=True), fill=(15, 23, 42))
+        draw2.text(
+            (40, ry + b_cell // 2 - 10), label, font=get_font(15, bold=True), fill=(15, 23, 42)
+        )
 
         c0_x = b_left
         inp_p = ENGINE_QUAL_DIRS["TRELLIS"] / sid / "input.png"
         inp_img = load_framed_image(inp_p, resolution=b_cell)
         canvas2.paste(inp_img, (c0_x, ry))
         draw2.rectangle([c0_x, ry, c0_x + b_cell, ry + b_cell], outline=(203, 213, 225), width=2)
-        draw_centered_text(draw2, c0_x, b_cell, ry + b_cell + 5, "Single-View RGB Input", f_cap, (100, 116, 139))
+        draw_centered_text(
+            draw2, c0_x, b_cell, ry + b_cell + 5, "Single-View RGB Input", f_cap, (100, 116, 139)
+        )
 
         c1_x = b_left + 1 * (b_cell + b_pad_x)
         gt_nov_p = ENGINE_QUAL_DIRS["TRELLIS"] / sid / "gt_novel.png"
-        gt_rgb_b = load_framed_image(gt_nov_p, resolution=b_cell) if gt_nov_p.exists() else gt_views[sid]["az65"].resize((b_cell, b_cell), Image.LANCZOS)
+        gt_rgb_b = (
+            load_framed_image(gt_nov_p, resolution=b_cell)
+            if gt_nov_p.exists()
+            else gt_views[sid]["az65"].resize((b_cell, b_cell), Image.LANCZOS)
+        )
         gt_comp = composite_with_inset(
             gt_rgb_b,
             gt_views[sid]["norm65"],
         )
         canvas2.paste(gt_comp, (c1_x, ry))
         draw2.rectangle([c1_x, ry, c1_x + b_cell, ry + b_cell], outline=(148, 163, 184), width=2)
-        draw_centered_text(draw2, c1_x, b_cell, ry + b_cell + 5, "GT Mesh + 3D Normals", f_cap, (71, 85, 105))
+        draw_centered_text(
+            draw2, c1_x, b_cell, ry + b_cell + 5, "GT Mesh + 3D Normals", f_cap, (71, 85, 105)
+        )
 
         for e_i, eng in enumerate(ENGINES):
             cx = b_left + (2 + e_i) * (b_cell + b_pad_x)
@@ -563,7 +631,9 @@ def main():
             border_col = (13, 148, 136) if is_best else (203, 213, 225)
             border_w = 3 if is_best else 2
             draw2.rectangle([cx, ry, cx + b_cell, ry + b_cell], outline=border_col, width=border_w)
-            cap = f"CD:{r['chamfer_distance']:.3f} | F@.1:{r['f_score_0.1']:.2f} | {r['psnr']:.1f}dB"
+            cap = (
+                f"CD:{r['chamfer_distance']:.3f} | F@.1:{r['f_score_0.1']:.2f} | {r['psnr']:.1f}dB"
+            )
             draw_centered_text(
                 draw2,
                 cx,
