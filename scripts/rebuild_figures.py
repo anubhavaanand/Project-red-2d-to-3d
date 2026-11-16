@@ -12,12 +12,12 @@ Engine columns reuse the pre-rendered Kaggle novel-view PNGs (avoids loading 920
 import ctypes
 import gc
 import os
-import sys
 from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import trimesh
-from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 # Headless EGL must be selected before pyrender/OpenGL is imported.
 os.environ.setdefault("PYOPENGL_PLATFORM", "egl")

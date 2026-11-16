@@ -19,10 +19,7 @@ Outputs:
 import csv
 import hashlib
 import json
-import os
 import shutil
-import sys
-from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
@@ -104,7 +101,7 @@ def find_file_case_insensitive(directory, filename_pattern):
 def analyze_run(batch_dir, engine_dir_name, engine_display_name, result_row):
     """Analyze a single run result."""
     sample_id = result_row["sample_id"]
-    
+
     # Find qualitative directory
     outputs_dir = KAGGLE_RUNS / batch_dir / "outputs"
     qual_dir = None
@@ -116,7 +113,7 @@ def analyze_run(batch_dir, engine_dir_name, engine_display_name, result_row):
         if pattern.exists():
             qual_dir = pattern
             break
-    
+
     analysis = {
         "engine": engine_display_name,
         "engine_dir": engine_dir_name,
@@ -146,7 +143,7 @@ def analyze_run(batch_dir, engine_dir_name, engine_display_name, result_row):
         "comment": "",
         "input_used": None,
     }
-    
+
     # Extract has_vertex_colors from metadata
     metadata = result_row.get("metadata")
     if metadata:
@@ -158,13 +155,13 @@ def analyze_run(batch_dir, engine_dir_name, engine_display_name, result_row):
                 pass
         if isinstance(metadata, dict):
             analysis["has_vertex_colors"] = metadata.get("has_vertex_colors")
-    
+
     if qual_dir:
         input_path = find_file_case_insensitive(qual_dir, "input.png")
         output_path = find_file_case_insensitive(qual_dir, f"{engine_display_name}_novel.png")
         gt_path = find_file_case_insensitive(qual_dir, "gt_novel.png")
         mesh_path = find_file_case_insensitive(qual_dir, f"{engine_display_name}_mesh.obj")
-        
+
         analysis["input_exists"] = input_path is not None
         analysis["novel_exists"] = output_path is not None
         analysis["gt_novel_exists"] = gt_path is not None
@@ -172,14 +169,14 @@ def analyze_run(batch_dir, engine_dir_name, engine_display_name, result_row):
         analysis["input_hash"] = image_hash(input_path) if input_path else None
         analysis["output_hash"] = image_hash(output_path) if output_path else None
         analysis["input_used"] = str(input_path) if input_path else None
-        
+
         # Check if output equals input
         if output_path and input_path:
             identical, h1, h2 = images_identical(input_path, output_path)
             analysis["output_equals_input"] = identical
             similar, corr = images_similar(input_path, output_path)
             analysis["output_similarity_to_input"] = corr
-            
+
             if identical:
                 analysis["comment"] = "OUTPUT IS IDENTICAL TO INPUT - model may have passed through input unchanged"
             elif corr > 0.95:
@@ -188,15 +185,15 @@ def analyze_run(batch_dir, engine_dir_name, engine_display_name, result_row):
                 analysis["comment"] = "Output completely different from input - expected for 3D reconstruction"
             else:
                 analysis["comment"] = f"Normal reconstruction (input-output corr={corr:.3f})"
-    
+
     return analysis
 
 def main():
     print("=== Comprehensive Analysis of 400 Benchmark Runs ===")
     print()
-    
+
     all_analyses = []
-    
+
     for batch_dir, engines in BATCH_ENGINES.items():
         for engine_dir_name, engine_display_name in engines:
             print(f"Loading {engine_display_name} results from {batch_dir}...", end=" ", flush=True)
@@ -205,17 +202,17 @@ def main():
                 print("NOT FOUND")
                 continue
             print(f"{len(results)} rows")
-            
+
             for row in results:
                 analysis = analyze_run(batch_dir, engine_dir_name, engine_display_name, row)
                 all_analyses.append(analysis)
-                
+
                 # Write per-object analysis
                 obj_dir = OUTPUT_DIR / "per_object" / engine_display_name / row["sample_id"]
                 obj_dir.mkdir(parents=True, exist_ok=True)
                 with open(obj_dir / "analysis.json", "w") as f:
                     json.dump(analysis, f, indent=2)
-                
+
                 # Copy images if they exist
                 if analysis["qual_dir_exists"]:
                     qual_dir = Path(analysis["qual_dir"])
@@ -223,9 +220,9 @@ def main():
                         src = find_file_case_insensitive(qual_dir, img_name)
                         if src:
                             shutil.copy2(src, obj_dir / img_name)
-    
+
     print(f"\nTotal runs analyzed: {len(all_analyses)}")
-    
+
     # Save CSV
     csv_path = OUTPUT_DIR / "analysis_400runs.csv"
     if all_analyses:
@@ -235,7 +232,7 @@ def main():
             writer.writeheader()
             writer.writerows(all_analyses)
         print(f"Saved CSV to {csv_path}")
-    
+
     # Find same-as-input runs
     same_as_input = [a for a in all_analyses if a["output_equals_input"]]
     if same_as_input:
@@ -248,7 +245,7 @@ def main():
             print(f"   {a['engine']}/{a['sample_id']} (PSNR={a['psnr']}, CD={a['chamfer_distance']})")
     else:
         print("\n✅ No runs have output identical to input")
-    
+
     # Summary statistics
     print("\n=== PER-ENGINE SUMMARY ===")
     for engine_display_name in ["TripoSR", "LGM", "TRELLIS", "SPAR3D"]:
@@ -264,7 +261,7 @@ def main():
         n_mesh = sum(1 for a in er if a["mesh_exists"])
         print(f"  {engine_display_name}: n={len(er)}, CD_mean={sum(cds)/len(cds):.4f}, PSNR_mean={sum(psnrs)/len(psnrs):.2f}, Lat_mean={sum(latencies)/len(latencies):.2f}s")
         print(f"    Files: input={n_input}, novel={n_novel}, mesh={n_mesh}, same_as_input={same_count}")
-    
+
     # Save markdown summary
     md_path = OUTPUT_DIR / "analysis_400runs_summary.md"
     lines = ["# 400-Run Benchmark Analysis", ""]
@@ -284,7 +281,7 @@ def main():
         latencies = [a["latency_s"] for a in er if a.get("latency_s") is not None]
         same_count = sum(1 for a in er if a["output_equals_input"])
         lines.append(f"| {engine_display_name} | {len(er)} | {sum(cds)/len(cds):.4f} | {sum(psnrs)/len(psnrs):.2f} | {sum(latencies)/len(latencies):.2f} | {same_count} |")
-    
+
     md_path.write_text("\n".join(lines))
     print(f"\nSaved markdown summary to {md_path}")
     print(f"\nAll output in: {OUTPUT_DIR}")

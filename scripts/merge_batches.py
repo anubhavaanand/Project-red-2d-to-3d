@@ -5,11 +5,12 @@ Merge Batch 1 (TripoSR + LGM) and Batch 2 (TRELLIS + SPAR3D) results into:
 2. unified_4models_table.tex (IEEE publication table)
 3. pareto_4models.png (Speed vs F-Score & VRAM Pareto plot)
 """
-import glob
 import json
 import sys
 from pathlib import Path
+
 import pandas as pd
+
 
 def merge_all(search_dirs):
     rows = []
