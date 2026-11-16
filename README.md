@@ -1,5 +1,9 @@
 # Image-to-3D Unified Benchmark
 
+[![CI](https://github.com/anubhavaanand/Project-red-2d-to-3d/actions/workflows/ci.yml/badge.svg)](https://github.com/anubhavaanand/Project-red-2d-to-3d/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 A reproducible, ground-truth-referenced benchmark for feed-forward single-image 3D reconstruction. Four representative paradigms are evaluated on Google Scanned Objects (GSO) under one locked protocol, on a single 16 GB NVIDIA Tesla T4: **400 evaluations** (100 objects × 4 engines), **0 failures**.
 
 The benchmark measures geometry (Chamfer Distance, F-Score), appearance (PSNR, LPIPS), cost (latency, peak VRAM), and output topology — then tests the ranking with paired significance tests rather than reporting means alone.
@@ -149,11 +153,11 @@ See [results/README.md](results/README.md) for the canonical CSV/TeX files and t
   author = {Anand, Anubhav},
   year   = {2026},
   note   = {Manuscript under review},
-  url    = {https://github.com/anubhavaanand/image-to-3d}
+  url    = {https://github.com/anubhavaanand/Project-red-2d-to-3d}
 }
 ```
 
-This repository is tagged [`v1.0.0`](https://github.com/anubhavaanand/image-to-3d/releases/tag/v1.0.0). The measurements were produced at code commit `09131e61568d98401e71861bc27fdce6637b2f20`; use that SHA, not the Kaggle kernel version number, when referring to the exact run.
+This repository is tagged [`v1.0.0`](https://github.com/anubhavaanand/Project-red-2d-to-3d/releases/tag/v1.0.0). The measurements were produced at code commit `09131e61568d98401e71861bc27fdce6637b2f20`; use that SHA, not the Kaggle kernel version number, when referring to the exact run.
 
 ## License and model terms
 

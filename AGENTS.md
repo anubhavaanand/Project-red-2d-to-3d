@@ -1,7 +1,7 @@
 # AGENTS.md — Authoritative Project Context for AI Agents
 
 ## 1. Project Identity
-- **Repository:** `image-to-3d-benchmark` (`https://github.com/anubhavaanand/image-to-3d`)
+- **Repository:** `image-to-3d-benchmark` (`https://github.com/anubhavaanand/Project-red-2d-to-3d`)
 - **Author:** Anubhav Anand (Amity University Uttar Pradesh)
 - **Workspace Root:** `/home/anubhavanand/Desktop/reasearch papers/`
 - **Repo Root:** `/home/anubhavanand/Desktop/reasearch papers/image-to-3d-benchmark/`
