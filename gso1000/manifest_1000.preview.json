@@ -16,6 +16,9 @@
     "dropped_sampling": 46,
     "forced_dropped_invalid": 0
   },
+  "warnings": [
+    "PREVIEW: no validation report was supplied, so every pool object is assumed valid (counts.validated_ok == counts.pool). Do not consume this manifest without running validation."
+  ],
   "objects": [
     "11pro_SL_TRX_FG",
     "2_of_Jenga_Classic_Game",

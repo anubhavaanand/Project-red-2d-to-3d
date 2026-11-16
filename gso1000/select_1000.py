@@ -168,6 +168,18 @@ def main() -> None:
         ),
         "counts": stats,
         "objects": manifest,
+        # DATA-03: a preview is a dry run. counts.validated_ok equals the pool
+        # size because nothing was validated, which reads like a real result.
+        # Say so in the artefact itself.
+        "warnings": (
+            [
+                "PREVIEW: no validation report was supplied, so every pool "
+                "object is assumed valid (counts.validated_ok == counts.pool). "
+                "Do not consume this manifest without running validation."
+            ]
+            if mode == "preview"
+            else []
+        ),
         **extras,
     }
     if mode == "final":
