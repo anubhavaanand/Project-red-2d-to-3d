@@ -92,14 +92,33 @@ class TestImportableAsModule:
     def test_direct_execution_reaches_bootstrap(self):
         """`python src/api/server.py` must not fail with an ImportError about
         relative imports — it should get at least as far as importing fastapi.
+
+        A successful run *blocks*, because server.py starts uvicorn and never
+        returns. So a TimeoutExpired means the bootstrap worked; only the
+        ImportError this test guards against is a real failure. The timeout is
+        generous because importing the engine stack (torch, diffusers) on a cold
+        runner can take a while.
         """
-        proc = subprocess.run(
-            [sys.executable, str(SERVER_PY)],
-            capture_output=True,
-            text=True,
-            cwd=str(SERVER_PY.parents[2]),
-            timeout=60,
-        )
-        combined = proc.stdout + proc.stderr
+        try:
+            proc = subprocess.run(
+                [sys.executable, str(SERVER_PY)],
+                capture_output=True,
+                text=True,
+                cwd=str(SERVER_PY.parents[2]),
+                timeout=120,
+            )
+            combined = proc.stdout + proc.stderr
+        except subprocess.TimeoutExpired as exc:
+            # The server started and is serving; that is the success path.
+            combined = (
+                (exc.stdout or b"").decode()
+                if isinstance(exc.stdout, bytes)
+                else (exc.stdout or "")
+            )
+            combined += (
+                (exc.stderr or b"").decode()
+                if isinstance(exc.stderr, bytes)
+                else (exc.stderr or "")
+            )
         assert "attempted relative import" not in combined
         assert "ImportError: attempted relative import with no known parent package" not in combined
