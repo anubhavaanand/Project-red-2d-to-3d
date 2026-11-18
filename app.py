@@ -46,6 +46,7 @@ import sys
 import tempfile
 import time
 import uuid
+from collections import OrderedDict
 from pathlib import Path
 
 import gradio as gr
@@ -100,11 +101,16 @@ def __getattr__(name: str):
             return _load_engine_class(engine_name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
+
 # ---------------------------------------------------------------------------
 # Global state — engines loaded lazily on first use to save startup time
 # ---------------------------------------------------------------------------
 
-_engines: dict = {}
+# APP-09: an OrderedDict gives O(1) LRU bookkeeping via move_to_end/popitem.
+_engines: "OrderedDict[str, object]" = OrderedDict()
+# Keep at most this many engines resident. Each engine holds a model in VRAM;
+# keeping all four alive exhausted memory on a T4.
+MAX_LOADED_ENGINES = 2
 _bg_remover: BackgroundRemover | None = None
 
 DEVICE = "cuda" if __import__("torch").cuda.is_available() else "cpu"
@@ -186,9 +192,30 @@ def _get_bg_remover() -> BackgroundRemover:
     return _bg_remover
 
 
+def _evict_lru_engine() -> str | None:
+    """Unload the least recently used engine if the cache is full.
+
+    APP-09: returns the evicted engine name, or None if nothing was evicted.
+    Unload errors are swallowed — a failure to free one engine must not stop a
+    request, and the next allocation will fail loudly if memory is still short.
+    """
+    if len(_engines) < MAX_LOADED_ENGINES:
+        return None
+    name, engine = _engines.popitem(last=False)  # least recently used
+    try:
+        engine.unload_model()
+    except Exception:
+        pass
+    return name
+
+
 def _get_engine(name: str):
     global _engines
     if name not in _engines:
+        # APP-09: every selected engine used to stay resident in VRAM forever, so
+        # trying all four exhausted memory. Cap the cache and unload the least
+        # recently used engine before loading a new one.
+        _evict_lru_engine()
         # APP-15: the engine class is imported here, not at module import.
         engine_cls = _load_engine_class(name)
         if name == "TripoSR":
@@ -203,6 +230,8 @@ def _get_engine(name: str):
             raise ValueError(f"Unknown engine: {name}")
         e.load_model()
         _engines[name] = e
+    # Refresh recency for the LRU ordering.
+    _engines.move_to_end(name)
     return _engines[name]
 
 
