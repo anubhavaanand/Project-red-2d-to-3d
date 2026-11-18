@@ -51,6 +51,15 @@ class Mesh3D:
 
 @dataclass
 class GaussianCloud:
+    """A 3D Gaussian splat cloud.
+
+    EXP-07: ``scales`` are **log-space**, matching the 3DGS convention that
+    every engine here emits (LGM's 14-channel head, TRELLIS's ``get_scaling()``,
+    SPAR3D) and that ``export_ply`` writes verbatim. A 3DGS viewer applies
+    ``exp()`` when building the covariance. If you construct one of these by
+    hand from linear world-unit scales, take ``np.log()`` first.
+    """
+
     positions: np.ndarray
     scales: np.ndarray
     rotations: np.ndarray
