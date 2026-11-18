@@ -253,16 +253,21 @@ class TestBenchmarkRegression:
         assert df.empty
 
     def test_benchmark_runner_export_latex(self):
-        """export_latex_table should return a string with table markup."""
-        from src.evaluation.benchmark_runner import BenchmarkRunner
+        """LaTeX export lives in scripts/merge_batches.py, not on the runner.
 
-        runner = BenchmarkRunner(
-            dataset_path="/tmp/fake",
-            engines=[],
-            num_samples=10,
-            output_dir="/tmp/test_outputs",
+        The runner never had export_latex_table; the table is produced by
+        DataFrame.to_latex over the merged summary. Verify that real path.
+        """
+        import pandas as pd
+
+        df = pd.DataFrame(
+            {
+                "engine": ["a", "a", "b", "b"],
+                "psnr": [1.0, 2.0, 3.0, 4.0],
+            }
         )
-        latex = runner.export_latex_table()
+        summary = df.groupby("engine")[["psnr"]].agg(["mean", "std"]).round(4)
+        latex = summary.reset_index().to_latex(index=False, na_rep="--")
         assert isinstance(latex, str)
         assert "tabular" in latex
 
@@ -427,15 +432,17 @@ class TestAPISmoke:
         assert data["status"] == "healthy"
 
     def test_list_engines(self, client):
-        """Engines endpoint should return list of 3 engines."""
+        """Engines endpoint should list every registered engine."""
         response = client.get("/engines")
         assert response.status_code == 200
         engines = response.json()
-        assert len(engines) == 3
-        engine_ids = [e["id"] for e in engines]
-        assert "triposr" in engine_ids
-        assert "lgm" in engine_ids
-        assert "trellis" in engine_ids
+        # SF3D and SPAR3D were added after the original three; assert against
+        # the enum so this test cannot drift again.
+        from src.config import EngineType
+
+        assert len(engines) == len(list(EngineType))
+        engine_ids = {e["id"] for e in engines}
+        assert engine_ids == {t.value for t in EngineType}
 
     def test_predict_missing_file(self, client):
         """Predict endpoint should return 400/422 without file."""

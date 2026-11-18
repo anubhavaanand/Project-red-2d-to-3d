@@ -33,10 +33,13 @@ class TestPruneLinearLayer:
         assert out.weight.shape == (2, 8)
 
     def test_values_are_selected(self):
+        # nn.Linear(4, 2) has weight shape [2, 4]; pruning dim=0 selects rows, so
+        # the index must be < 2. (The previous [1, 3] was out of range and only
+        # passed because torch was never installed, so the test never ran.)
         layer = nn.Linear(4, 2)
         with torch.no_grad():
             layer.weight.copy_(torch.arange(8, dtype=torch.float32).reshape(2, 4))
-        out = _prune_fn()(layer, torch.tensor([1, 3]), dim=0)
+        out = _prune_fn()(layer, torch.tensor([1]), dim=0)
         assert torch.allclose(out.weight, torch.tensor([[4.0, 5.0, 6.0, 7.0]]))
 
     def test_requires_grad_is_preserved_when_true(self):
