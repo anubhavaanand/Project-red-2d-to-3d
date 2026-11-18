@@ -2,6 +2,7 @@
 
 import ast
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -74,14 +75,32 @@ class TestNoSilentSampleReduction:
 
 
 class TestRowCountGate:
-    """NB-10 overlaps: the aggregation cell must flag a short table."""
+    """NB-10: the aggregation cell must FAIL on a short table, not just warn."""
+
+    def _agg(self, path):
+        return next(src for src in _cell_sources(path).values() if "EXPECTED_ENGINES" in src)
 
     @pytest.mark.parametrize("name,path", sorted(KERNELS.items()))
-    def test_aggregation_warns_on_a_row_count_mismatch(self, name, path):
-        sources = _cell_sources(path)
-        agg = next(
-            (src for src in sources.values() if 'groupby("engine").size()' in src),
-            None,
-        )
-        assert agg is not None, f"{name}: no row-count check found"
-        assert "row-count mismatch" in agg or "NUM_SAMPLES" in agg
+    def test_aggregation_raises_on_a_row_count_mismatch(self, name, path):
+        agg = self._agg(path)
+        assert "raise RuntimeError" in agg, "a mismatch must fail the kernel"
+        assert "row-count mismatch" in agg
+
+    @pytest.mark.parametrize("name,path", sorted(KERNELS.items()))
+    def test_aggregation_checks_every_expected_engine(self, name, path):
+        """A missing engine must be caught, not only a short one."""
+        agg = self._agg(path)
+        assert "_missing_engines" in agg
+        assert "set(EXPECTED_ENGINES) - set(_counts)" in agg
+
+    @pytest.mark.parametrize("name,path", sorted(KERNELS.items()))
+    def test_expected_engines_use_the_reported_names(self, name, path):
+        """EXPECTED_ENGINES must use get_engine_info()['name'], not the class id."""
+        line = next(line for line in self._agg(path).splitlines() if "EXPECTED_ENGINES =" in line)
+        declared = set(re.findall(r'"([^"]+)"', line))
+        expected = {"TripoSR", "LGM"} if name == "batch1" else {"TRELLIS", "SPAR3D"}
+        assert declared == expected, f"{name} declares {declared}, expected {expected}"
+
+    @pytest.mark.parametrize("name,path", sorted(KERNELS.items()))
+    def test_incomplete_run_is_recorded(self, name, path):
+        assert "incomplete_run.json" in self._agg(path)
