@@ -24,6 +24,33 @@ class TestColumns:
             fields = csv.DictReader(f).fieldnames
         assert "run_root" in fields
 
+    def test_has_code_sha(self):
+        """DATA-09: a mesh must be traceable to the protocol version that made it."""
+        with MANIFEST.open(newline="") as f:
+            fields = csv.DictReader(f).fieldnames
+        assert "code_sha" in fields
+
+    def test_has_protocol_version(self):
+        with MANIFEST.open(newline="") as f:
+            fields = csv.DictReader(f).fieldnames
+        assert "protocol_version" in fields
+
+    def test_code_sha_is_a_full_sha(self, rows):
+        """A short SHA is ambiguous; the published value is the full 40 chars."""
+        for row in rows:
+            assert len(row["code_sha"]) == 40, row["sample_id"]
+            assert all(c in "0123456789abcdef" for c in row["code_sha"])
+
+    def test_code_sha_is_the_published_run_commit(self, rows):
+        """The SHA must match the one README names as the source of the numbers."""
+        readme = MANIFEST.parent.parent / "README.md"
+        expected = "09131e61568d98401e71861bc27fdce6637b2f20"
+        assert expected in readme.read_text()
+        assert {row["code_sha"] for row in rows} == {expected}
+
+    def test_protocol_version_is_populated(self, rows):
+        assert {row["protocol_version"] for row in rows} == {"v35"}
+
     def test_required_columns_present(self):
         with MANIFEST.open(newline="") as f:
             fields = csv.DictReader(f).fieldnames
