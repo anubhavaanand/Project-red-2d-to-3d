@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import gc
 import json
+import signal
 import time
 import traceback
 from contextlib import contextmanager
@@ -890,20 +891,42 @@ class BenchmarkRunner:
         if not samples:
             raise RuntimeError(f"No valid GSO samples found in {self.dataset_path}")
 
-        import signal
-
+        # EVAL-27: signal.signal() mutates process-wide state. Save whatever the
+        # host had installed and put it back when run() returns, so embedding the
+        # runner does not silently change Ctrl-C / SIGTERM behaviour for the
+        # calling process.
         def _sig_handler(signum, _frame):
             print(
                 f"\n[BenchmarkRunner] Caught signal {signum} — stopping gracefully after current step so outputs are saved!"
             )
             self._stop_requested = True
 
+        _previous_handlers: dict[int, object] = {}
         try:
-            signal.signal(signal.SIGTERM, _sig_handler)
-            signal.signal(signal.SIGINT, _sig_handler)
-        except Exception:
+            for sig in (signal.SIGTERM, signal.SIGINT):
+                _previous_handlers[sig] = signal.getsignal(sig)
+                signal.signal(sig, _sig_handler)
+        except (ValueError, OSError):
+            # signal.signal only works on the main thread. A runner embedded in a
+            # worker thread simply runs without the graceful-stop handler — and
+            # anything already installed above is restored below, not leaked.
             pass
 
+        try:
+            return self._run_engines(samples)
+        finally:
+            for sig, previous in _previous_handlers.items():
+                # signal.getsignal returns None when no handler was installed;
+                # signal.signal would reject that, so skip it.
+                if previous is None:
+                    continue
+                try:
+                    signal.signal(sig, previous)
+                except (ValueError, OSError, TypeError):
+                    pass
+
+    def _run_engines(self, samples: list) -> pd.DataFrame:
+        """Run every engine over ``samples``. Split out of run() for EVAL-27."""
         for engine in self.engines:
             info = engine.get_engine_info()
             engine_name = info.get("name", engine.__class__.__name__)
