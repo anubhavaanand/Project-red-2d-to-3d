@@ -125,9 +125,21 @@ pinned set used for the published runs, kept for reproducibility; installing it
 *after* the extras can downgrade a package the extras resolved, so use it only
 inside a clean environment.
 
-See [docs/COMPILE.md](docs/COMPILE.md) for the CUDA extensions
-(`diff-gaussian-rasterization`, the `spconv` wheels, the SF3D rasterizer) that
-must be built or installed separately.
+**Reproducible installs (PKG-15).** `requirements/lock-core.txt` is a fully
+hashed lockfile (uv `--generate-hashes`) for the core slice — the evaluation
+harness, metrics and result tooling, with no torch. Use it when two machines must
+agree exactly:
+
+```bash
+make install-core   # core stack, no torch
+make lock           # regenerate it from pyproject.toml (needs uv)
+```
+
+The `engines`, `app`, `api`, `notebooks` and `sf3d` extras are deliberately
+**not** locked. They all pull in torch and its CUDA tree, and they contain git
+dependencies (`flash-attn`, `diff-gaussian-rasterization`, `diffoctreerast`) that
+cannot be hashed; a lockfile for them would be ~2 GB and would just duplicate the
+engine install. Follow `docs/COMPILE.md` for those.
 
 ## Reproducing the benchmark
 
