@@ -205,11 +205,60 @@ def bake_texture_to_vertices(tm, mesh_path: str | Path | None = None):
     )
 
 
+def _validate_against_manifest(root: Path, manifest_path: str | Path) -> list[str]:
+    """DATA-07: check the dataset on disk against the recorded manifest.
+
+    Returns the manifest's object_ids on success. Raises RuntimeError when the
+    manifest is unreadable, disagrees with its own declared count, lists an object
+    the dataset does not have, or is missing an object the dataset does have.
+    """
+    path = Path(manifest_path)
+    if not path.is_file():
+        raise RuntimeError(f"[GSO Loader] manifest not found: {path}")
+
+    try:
+        manifest = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"[GSO Loader] cannot read manifest {path}: {exc}") from exc
+
+    ids = manifest.get("object_ids")
+    if not isinstance(ids, list) or not ids:
+        raise RuntimeError(f"[GSO Loader] manifest {path} has no object_ids list")
+
+    declared = manifest.get("count")
+    if isinstance(declared, int) and declared != len(ids):
+        raise RuntimeError(
+            f"[GSO Loader] manifest {path} declares count={declared} "
+            f"but lists {len(ids)} object_ids"
+        )
+
+    on_disk = {d.name for d in root.iterdir() if d.is_dir()} if root.is_dir() else set()
+    missing = [o for o in ids if o not in on_disk]
+    if missing:
+        raise RuntimeError(
+            f"[GSO Loader] {len(missing)} of {len(ids)} manifest objects are absent "
+            f"from {root}: {missing[:10]}"
+        )
+    unlisted = sorted(on_disk - set(ids))
+    if unlisted:
+        print(
+            f"[GSO Loader] NOTE: {len(unlisted)} dataset object(s) are not in the "
+            f"manifest and will not be evaluated: {unlisted[:10]}"
+        )
+
+    version = manifest.get("version")
+    print(
+        f"[GSO Loader] manifest {path.name} (version {version}) matches: {len(ids)} objects present"
+    )
+    return list(ids)
+
+
 def load_gso_samples(
     dataset_path: str | Path,
     num_samples: int = 100,
     num_gt_points: int = 10000,
     object_ids: list[str] | None = None,
+    manifest_path: str | Path | None = None,
 ) -> list[GSOSample]:
     import trimesh
 
@@ -218,7 +267,20 @@ def load_gso_samples(
         print(f"[GSO Loader] Dataset path not found: {root}")
         return []
 
+    # DATA-07: the manifest used to be a dead file — the loader scanned
+    # directories and never read it, so it could drift from the dataset silently.
+    # When a manifest is supplied, validate the dataset against it before use.
+    manifest_ids: list[str] | None = None
+    if manifest_path is not None:
+        manifest_ids = _validate_against_manifest(root, manifest_path)
+
     samples: list[GSOSample] = []
+    # DATA-07: when a manifest is supplied, drive the run from its object_ids so
+    # the recorded selection is what actually gets evaluated.
+    if object_ids is None and manifest_ids:
+        object_ids = manifest_ids[:num_samples]
+        print(f"[GSO Loader] using manifest {manifest_path} ({len(object_ids)} objects)")
+
     if object_ids:
         _missing = [o for o in object_ids if not (root / o).is_dir()]
         if _missing:
