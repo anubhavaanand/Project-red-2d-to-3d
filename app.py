@@ -519,6 +519,16 @@ if __name__ == "__main__":
     else:
         print("[SECURITY] No credentials set — running in local-only mode (127.0.0.1)")
 
+    app.queue(
+        # APP-14: generate_3d is synchronous and can take tens of seconds per
+        # request. Without a queue every click ran on the single uvicorn worker
+        # and blocked all other users. default_concurrency_limit caps how many
+        # inferences run at once so VRAM is not oversubscribed; max_size bounds
+        # the waiting line; status_update_rate controls progress pushback.
+        default_concurrency_limit=int(os.environ.get("GRADIO_CONCURRENCY", "1")),
+        max_size=int(os.environ.get("GRADIO_QUEUE_SIZE", "20")),
+        status_update_rate=float(os.environ.get("GRADIO_STATUS_RATE", "1.0")),
+    )
     app.launch(
         server_name=os.environ.get("GRADIO_SERVER_NAME", "127.0.0.1"),
         server_port=int(os.environ.get("PORT", 7860)),
