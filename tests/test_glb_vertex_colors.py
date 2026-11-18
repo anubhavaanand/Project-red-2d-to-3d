@@ -78,3 +78,45 @@ class TestSourceContract:
 
     def test_glb_parses(self):
         ast.parse(GLB.read_text())
+
+
+class TestGeometryIsPreserved:
+    """EXP-02: trimesh.Trimesh defaults to process=True, which merges vertices.
+
+    That silently changes face indices and can drop per-vertex colours and UV
+    seams, so the export must pass process=False and round-trip exactly.
+    """
+
+    def test_source_passes_process_false(self):
+        assert "process=False" in GLB.read_text()
+
+    def test_vertices_round_trip_exactly(self, tmp_path):
+        verts = np.array(
+            [[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], [1, 1, 1]],
+            dtype=np.float32,
+        )
+        faces = np.array([[0, 1, 2], [0, 1, 3], [0, 2, 3], [1, 2, 3], [1, 3, 4]], dtype=np.int64)
+        mesh = Mesh3D(vertices=verts, faces=faces)
+        out = tmp_path / "m.glb"
+        export_glb(mesh, str(out))
+
+        loaded = trimesh.load(out, process=False)
+        geom = next(iter(loaded.geometry.values())) if hasattr(loaded, "geometry") else loaded
+        # No merging: the vertex count and positions must be untouched.
+        assert len(geom.vertices) == len(verts)
+        assert np.allclose(np.asarray(geom.vertices), verts, atol=1e-6)
+
+    def test_duplicate_vertices_are_not_merged(self, tmp_path):
+        """Two coincident vertices are distinct data and must survive export."""
+        verts = np.array(
+            [[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 0]],
+            dtype=np.float32,
+        )
+        faces = np.array([[0, 1, 2], [1, 2, 3]], dtype=np.int64)
+        mesh = Mesh3D(vertices=verts, faces=faces)
+        out = tmp_path / "dup.glb"
+        export_glb(mesh, str(out))
+
+        loaded = trimesh.load(out, process=False)
+        geom = next(iter(loaded.geometry.values())) if hasattr(loaded, "geometry") else loaded
+        assert len(geom.vertices) == 4, "process=True would have merged the duplicates"
