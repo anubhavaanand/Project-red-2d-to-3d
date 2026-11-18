@@ -121,6 +121,63 @@ except OSError:
     # per-user path already prevents cross-user name collisions.
     pass
 
+# APP-08: the output directory was never pruned, so it grew without bound and
+# stale models stayed downloadable for as long as the process lived. Cap both the
+# number of files and their age, and sweep on startup and after each generation.
+MAX_OUTPUT_FILES = 200
+OUTPUT_MAX_AGE_S = 24 * 60 * 60  # 24 hours
+
+
+def _prune_output_dir(
+    directory: Path = OUTPUT_DIR,
+    max_files: int = MAX_OUTPUT_FILES,
+    max_age_s: int = OUTPUT_MAX_AGE_S,
+) -> int:
+    """Delete old outputs from ``directory``. Returns the number removed.
+
+    Removes files older than ``max_age_s`` first, then — if the directory is
+    still over ``max_files`` — the oldest remaining files by mtime. Only regular
+    files directly inside ``directory`` are considered; a missing directory is
+    not an error.
+    """
+    if not directory.is_dir():
+        return 0
+
+    now = time.time()
+    removed = 0
+    survivors: list[tuple[float, Path]] = []
+
+    for entry in directory.iterdir():
+        try:
+            if not entry.is_file():
+                continue
+            mtime = entry.stat().st_mtime
+        except OSError:
+            continue
+        if now - mtime > max_age_s:
+            try:
+                entry.unlink()
+                removed += 1
+            except OSError:
+                pass
+        else:
+            survivors.append((mtime, entry))
+
+    if len(survivors) > max_files:
+        survivors.sort(key=lambda item: item[0])  # oldest first
+        for _, entry in survivors[: len(survivors) - max_files]:
+            try:
+                entry.unlink()
+                removed += 1
+            except OSError:
+                pass
+
+    return removed
+
+
+# Sweep leftovers from a previous run as soon as the module loads.
+_prune_output_dir()
+
 
 def _get_bg_remover() -> BackgroundRemover:
     global _bg_remover
@@ -230,6 +287,8 @@ def generate_3d(
         # 3. Export
         # APP-03: a millisecond timestamp collides when two requests land in
         # the same millisecond (or on a coarse clock); uuid4 is unique.
+        # APP-08: keep the directory bounded across requests, not just at boot.
+        _prune_output_dir()
         out_file = OUTPUT_DIR / f"output_{uuid.uuid4().hex}"
 
         if result.mesh is not None:
