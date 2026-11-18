@@ -2,12 +2,12 @@
 
 import ast
 import inspect
-import sys
 import types
 from pathlib import Path
 
 import numpy as np
 import pytest
+from conftest import TorchStub
 
 from src.engines._outputs import EngineOutputError, extract_mesh_object
 
@@ -16,35 +16,15 @@ ENGINE = Path(__file__).parent.parent / "src" / "engines" / "sf3d_engine.py"
 
 @pytest.fixture(scope="module")
 def sf3d():
-    """Import sf3d_engine with a minimal torch stub."""
-    t = types.ModuleType("torch")
-    t.__version__ = "0.0-stub"
-    t.float32, t.int64 = "float32", "int64"
-    t.device = lambda x: x
-    t.cuda = types.SimpleNamespace(
-        is_available=lambda: False, empty_cache=lambda: None, device=lambda d: _NoCtx()
-    )
+    """Import sf3d_engine with a minimal torch stub (restored on teardown)."""
+    stub = TorchStub()
+    stub()
+    try:
+        from src.engines import sf3d_engine
 
-    class _NoCtx:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *a):
-            return False
-
-        def __call__(self, fn):
-            return fn
-
-    t.no_grad = lambda: _NoCtx()
-    t.nn = types.ModuleType("torch.nn")
-    t.nn.functional = types.ModuleType("torch.nn.functional")
-    sys.modules["torch"] = t
-    sys.modules["torch.nn"] = t.nn
-    sys.modules["torch.nn.functional"] = t.nn.functional
-
-    from src.engines import sf3d_engine
-
-    return sf3d_engine
+        return sf3d_engine
+    finally:
+        stub.restore()
 
 
 class _Mesh:

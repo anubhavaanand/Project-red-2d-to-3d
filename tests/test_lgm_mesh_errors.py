@@ -4,46 +4,22 @@ These exercise the real code paths with a stubbed torch so a regression in the
 error handling is caught even where torch is not installed.
 """
 
-import sys
-import types
-
 import numpy as np
 import pytest
+from conftest import TorchStub
 
 
 @pytest.fixture(scope="module")
 def lgm():
-    """Import lgm_engine with a minimal torch stub (torch is not installed here)."""
-    if "torch" not in sys.modules:
-        t = types.ModuleType("torch")
-        t.__version__ = "0.0-stub"
-        t.float32, t.float16, t.int64 = "float32", "float16", "int64"
-        t.device = lambda x: x
+    """Import lgm_engine with a minimal torch stub (restored on teardown)."""
+    stub = TorchStub()
+    stub()
+    try:
+        from src.engines import lgm_engine
 
-        class _NoCtx:
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *a):
-                return False
-
-        t.no_grad = _NoCtx
-        t.cuda = types.SimpleNamespace(is_available=lambda: False)
-        t.nn = types.ModuleType("torch.nn")
-        t.nn.functional = types.ModuleType("torch.nn.functional")
-        sys.modules["torch"] = t
-        sys.modules["torch.nn"] = t.nn
-        sys.modules["torch.nn.functional"] = t.nn.functional
-
-    for name in ("safetensors", "safetensors.torch", "huggingface_hub"):
-        sys.modules.setdefault(name, types.ModuleType(name))
-    sys.modules["safetensors.torch"].load_file = lambda *a, **k: {}
-    sys.modules["huggingface_hub"].hf_hub_download = lambda *a, **k: ""
-    sys.modules["huggingface_hub"].snapshot_download = lambda *a, **k: ""
-
-    from src.engines import lgm_engine
-
-    return lgm_engine
+        return lgm_engine
+    finally:
+        stub.restore()
 
 
 def _cloud(opa_values, n_colour=3):

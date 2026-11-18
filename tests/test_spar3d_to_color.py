@@ -1,42 +1,23 @@
 """Behavioural tests for SPAR3D's optional vis.to_color() path (ENG-34)."""
 
-import sys
 import types
 
 import numpy as np
 import pytest
+from conftest import TorchStub
 
 
 @pytest.fixture(scope="module")
 def spar3d():
-    """Import spar3d_engine with a minimal torch stub."""
-    t = types.ModuleType("torch")
-    t.__version__ = "0.0-stub"
-    t.float32, t.int64 = "float32", "int64"
-    t.device = lambda x: x
-    t.cuda = types.SimpleNamespace(is_available=lambda: False, empty_cache=lambda: None)
+    """Import spar3d_engine with a minimal torch stub (restored on teardown)."""
+    stub = TorchStub()
+    stub()
+    try:
+        from src.engines import spar3d_engine
 
-    class _NoCtx:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *a):
-            return False
-
-        def __call__(self, fn):
-            # supports use as a decorator: @torch.no_grad()
-            return fn
-
-    t.no_grad = lambda: _NoCtx()
-    t.nn = types.ModuleType("torch.nn")
-    t.nn.functional = types.ModuleType("torch.nn.functional")
-    sys.modules["torch"] = t
-    sys.modules["torch.nn"] = t.nn
-    sys.modules["torch.nn.functional"] = t.nn.functional
-
-    from src.engines import spar3d_engine
-
-    return spar3d_engine
+        return spar3d_engine
+    finally:
+        stub.restore()
 
 
 class _Vis:

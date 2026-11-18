@@ -3,53 +3,24 @@
 Exercises the real guard in predict() rather than asserting on source text.
 """
 
-import sys
 import types
 
 import pytest
+from conftest import TorchStub
 
 
 @pytest.fixture(scope="module")
 def trellis_mod():
-    """Import trellis_engine with a minimal torch stub.
+    """Import trellis_engine with a minimal torch stub (restored on teardown)."""
+    stub = TorchStub()
+    # trellis_engine reads torch.OutOfMemoryError when wrapping failures.
+    stub(OutOfMemoryError=type("OutOfMemoryError", (RuntimeError,), {}))
+    try:
+        from src.engines import trellis_engine
 
-    Installs unconditionally: other test modules may have registered a different
-    stub, and this one must be the one trellis_engine sees.
-    """
-    t = types.ModuleType("torch")
-    t.__version__ = "0.0-stub"
-    t.float32, t.float16, t.int64 = "float32", "float16", "int64"
-    t.device = lambda x: x
-    t.manual_seed = lambda s: None
-
-    class _NoCtx:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *a):
-            return False
-
-        def __call__(self, fn):
-            # supports use as a decorator: @torch.no_grad()
-            return fn
-
-    t.no_grad = lambda: _NoCtx()
-    t.cuda = types.SimpleNamespace(
-        is_available=lambda: False,
-        empty_cache=lambda: None,
-        ipc_collect=lambda: None,
-        device=lambda d: _NoCtx(),
-    )
-    t.nn = types.ModuleType("torch.nn")
-    t.nn.functional = types.ModuleType("torch.nn.functional")
-    t.OutOfMemoryError = type("OutOfMemoryError", (RuntimeError,), {})
-    sys.modules["torch"] = t
-    sys.modules["torch.nn"] = t.nn
-    sys.modules["torch.nn.functional"] = t.nn.functional
-
-    from src.engines import trellis_engine
-
-    return trellis_engine
+        return trellis_engine
+    finally:
+        stub.restore()
 
 
 class TestSupportedFormats:
