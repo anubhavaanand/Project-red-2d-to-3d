@@ -119,11 +119,15 @@ pip install -e ".[dev]"        # lint/test/security tooling
 pip install -e ".[all]"
 ```
 
-The full pinned set used for the published runs is in `requirements.txt`; see
-[docs/COMPILE.md](docs/COMPILE.md) for the CUDA extensions (`diff-gaussian-rasterization`,
-`spconv`, the SF3D rasterizer) that must be built from source.
+**Pick one, do not run both.** `pip install -e ".[...]"` resolves through
+`pyproject.toml` and is the canonical install. `requirements.txt` is the exact
+pinned set used for the published runs, kept for reproducibility; installing it
+*after* the extras can downgrade a package the extras resolved, so use it only
+inside a clean environment.
 
-LGM, TRELLIS, and SPAR3D require custom CUDA extensions (`diff-gaussian-rasterization`, `spconv`, and the SPAR3D rasterizer). See [docs/COMPILE.md](docs/COMPILE.md).
+See [docs/COMPILE.md](docs/COMPILE.md) for the CUDA extensions
+(`diff-gaussian-rasterization`, the `spconv` wheels, the SF3D rasterizer) that
+must be built or installed separately.
 
 ## Reproducing the benchmark
 
