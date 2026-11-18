@@ -94,9 +94,26 @@ image-to-3d-benchmark/
 ## Installation
 
 ```bash
+# Core: evaluation harness, metrics, result CSV tooling (no torch, no GPU stack)
 pip install -e .
-pip install -r requirements.txt
+
+# Inference stack (torch + engine-side deps, CPU wheels by default)
+pip install -e ".[engines]"
+
+# Optional slices
+pip install -e ".[app]"        # Gradio demo (engines + gradio)
+pip install -e ".[api]"        # FastAPI server (engines + fastapi/uvicorn)
+pip install -e ".[notebooks]"  # Kaggle/Colab kernel glue
+pip install -e ".[sf3d]"       # SF3D prerequisites (see COMPILE.md for CUDA build)
+pip install -e ".[dev]"        # lint/test/security tooling
+
+# Everything above
+pip install -e ".[all]"
 ```
+
+The full pinned set used for the published runs is in `requirements.txt`; see
+[docs/COMPILE.md](docs/COMPILE.md) for the CUDA extensions (`diff-gaussian-rasterization`,
+`spconv`, the SF3D rasterizer) that must be built from source.
 
 LGM, TRELLIS, and SPAR3D require custom CUDA extensions (`diff-gaussian-rasterization`, `spconv`, and the SPAR3D rasterizer). See [docs/COMPILE.md](docs/COMPILE.md).
 

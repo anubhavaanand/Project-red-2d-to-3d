@@ -2,7 +2,10 @@
 torch==2.2.0
 torchvision==0.17.0
 numpy>=1.26.0,<3.0
-Pillow==10.2.0
+# CVE-2026-112404 / -112899 / -128066 are fixed in 13.0.0, which needs Python
+# >=3.11. On 3.10 use 12.3.0, the newest wheel that still supports it.
+Pillow==13.0.0; python_version >= "3.11"
+Pillow==12.3.0; python_version < "3.11"
 scikit-image==0.22.0
 
 # 3D / mesh
@@ -15,8 +18,11 @@ pyrender==0.1.45
 lpips==0.1.4
 
 # Background removal
-rembg[gpu]==2.0.50
-onnxruntime==1.17.0
+# PKG-07: rembg owns the ONNX runtime. Install the CPU extra only and let it
+# pull the matching onnxruntime — do NOT also list `onnxruntime` explicitly, or
+# pip may install both the CPU and GPU runtimes and provider selection becomes
+# ambiguous.
+rembg[cpu]==2.0.50
 
 # Web / API
 fastapi==0.109.2
@@ -34,7 +40,10 @@ pandas==2.2.0
 pydantic==2.6.1
 
 # TripoSR dependencies
-torchmcubes @ git+https://github.com/tatsy/torchmcubes.git
+# PKG-09: torchmcubes is NOT used. triposr_engine.py monkeypatches marching_cubes
+# with a scikit-image CPU implementation (see _skimage_mc_func) and never calls
+# torchmcubes. Installing it forces a CUDA build for CPU-only users, so it is
+# deliberately omitted here; install it yourself only if you want to opt back in.
 xatlas==0.0.9
 omegaconf==2.3.0
 
