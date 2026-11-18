@@ -19,6 +19,14 @@ The benchmark measures geometry (Chamfer Distance, F-Score), appearance (PSNR, L
 | **SPAR3D** | Point-aware diffusion + deformable tetrahedra | DMTet + PBR UV baking | [arXiv:2501.04689](https://arxiv.org/abs/2501.04689) |
 | **TRELLIS** | Sparse structured latents + rectified flow | FlexiCubes | [arXiv:2412.01506](https://arxiv.org/abs/2412.01506) |
 
+**Also implemented, not part of the headline run:**
+
+| Engine | Representation | Decoder | Status | Reference |
+|---|---|---|---|---|
+| **SF3D** | DINOv2 + LRM-style transformer | DMTet + spherical-Gaussian delighting | Paradigm-1 ablation only — **no** rows in `unified_results_4engines_100obj.csv` | [arXiv:2408.00653](https://arxiv.org/abs/2408.00653) |
+
+SF3D exists as a first-class engine (`src/engines/sf3d_engine.py`, `EngineType.SF3D`, `SF3DEngine` exported from `src.engines`) and shares TripoSR's paradigm with a different decoder, which is why it is kept for the DMTet-vs-Marching-Cubes ablation. It is deliberately **excluded** from every headline number: the 400 evaluations, the significance tests and the figures are all TripoSR / LGM / SPAR3D / TRELLIS. Installing it needs a CUDA build — see `docs/COMPILE.md` and `pip install -e ".[sf3d]"`.
+
 ## Headline results (n = 100)
 
 Measured on a Tesla T4 (15.6 GB) with the protocol below. Best per column in **bold**.
