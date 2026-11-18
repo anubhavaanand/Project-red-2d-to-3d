@@ -12,6 +12,17 @@ def export_ply(gaussians: GaussianCloud, filepath: str) -> None:
     """
     Exports a GaussianCloud to a standard 3DGS PLY format.
     Compatible with 3DGS visualizers (e.g. SuperSplat, MeshLab, WebGL 3DGS).
+
+    EXP-07: **scale convention.** This writes ``gaussians.scales`` verbatim,
+    which is what every engine in this repo produces — LGM's 14-channel head,
+    TRELLIS's ``get_scaling()`` and SPAR3D all emit *log-space* scales, the
+    convention 3DGS PLY readers expect (a viewer applies ``exp()`` when it
+    builds the covariance). Do **not** exponentiate here: doing so would make
+    the splats render at the wrong size in every standard viewer.
+
+    If you build a GaussianCloud by hand with *linear* (world-unit) scales,
+    convert first, e.g. ``np.log(scales)`` — the PLY format has no field that
+    records which convention a file uses.
     """
     if gaussians is None:
         raise ValueError("GaussianCloud is None, cannot export.")
