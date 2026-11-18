@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 
 from ..engines.base import GaussianCloud
-from ._validate import require_finite
+from ._validate import require_finite, require_matching_length
 
 
 def export_ply(gaussians: GaussianCloud, filepath: str) -> None:
@@ -25,6 +25,31 @@ def export_ply(gaussians: GaussianCloud, filepath: str) -> None:
     require_finite("rotations", gaussians.rotations)
     require_finite("opacities", gaussians.opacities)
     require_finite("sh_coeffs", gaussians.sh_coeffs)
+
+    # EXP-11: every attribute array must have one row per position. Checked
+    # before the file is opened, because a mismatch used to raise inside
+    # np.concatenate after the header had already been flushed — leaving a
+    # truncated PLY behind.
+    require_matching_length(
+        "scales",
+        n,
+        gaussians.scales,
+    )
+    require_matching_length(
+        "rotations",
+        n,
+        gaussians.rotations,
+    )
+    require_matching_length(
+        "opacities",
+        n,
+        gaussians.opacities,
+    )
+    require_matching_length(
+        "sh_coeffs",
+        n,
+        gaussians.sh_coeffs,
+    )
 
     # Scale attributes
     if gaussians.scales is not None:
