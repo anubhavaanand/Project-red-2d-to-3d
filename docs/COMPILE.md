@@ -35,9 +35,10 @@ TRELLIS uses sparse convolution operations for its structured latent models.
 pip install spconv-cu126   # CUDA 12.6 wheels
 # fallback if your mirror has no cu126 build:
 pip install spconv-cu120   # CUDA 12.0 wheels
-spconv` is also the only practical route to the `cumm` headers it JIT-compiles against;
-set `CPATH` to the installed cumm include dir so the JIT build finds them:
 ```
+
+The wheel is also the only practical route to the `cumm` headers spconv JIT-compiles
+against. Point `CPATH` at the installed cumm include directory so the JIT build finds them:
 
 ```bash
 export CUMM_HOME=$(python -c "import cumm, pathlib; print(pathlib.Path(cumm.__file__).parent)")
