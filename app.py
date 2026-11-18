@@ -40,11 +40,11 @@ HuggingFace Space URL (after deploy):
 
 from __future__ import annotations
 
+import importlib
 import os
 import sys
-import time
 import tempfile
-import traceback
+import time
 import uuid
 from pathlib import Path
 
@@ -64,12 +64,41 @@ except ModuleNotFoundError:  # pragma: no cover - source checkout only
         sys.path.append(str(Path(__file__).parent))
     from src.preprocessing.background_removal import BackgroundRemover
 
-from src.engines.triposr_engine import TriposrEngine
-from src.engines.trellis_engine import TrellisEngine
-from src.engines.lgm_engine import LGMEngine
-from src.engines.spar3d_engine import Spar3dEngine
 from src.export.glb_exporter import export_glb
 from src.export.ply_exporter import export_ply
+
+# ---------------------------------------------------------------------------
+# Engine registry — APP-15: import engine modules lazily, inside _get_engine().
+#
+# The old code imported all four engine modules at module import, which pulled
+# in torch, diffusers, transformers and the CUDA stack before the UI had even
+# rendered — a slow cold start for a process that may only ever run one engine.
+# Each engine is now imported the first time it is actually selected.
+#
+# The classes are exposed as module-level names so existing callers (and tests)
+# that do `app.TriposrEngine` keep working; they resolve on first access.
+# ---------------------------------------------------------------------------
+_ENGINE_MODULES = {
+    "TripoSR": ("src.engines.triposr_engine", "TriposrEngine"),
+    "TRELLIS": ("src.engines.trellis_engine", "TrellisEngine"),
+    "LGM": ("src.engines.lgm_engine", "LGMEngine"),
+    "SPAR3D": ("src.engines.spar3d_engine", "Spar3dEngine"),
+}
+
+
+def _load_engine_class(name: str):
+    """Import and return the engine class for ``name`` (APP-15)."""
+    module_path, class_name = _ENGINE_MODULES[name]
+    module = importlib.import_module(module_path)
+    return getattr(module, class_name)
+
+
+def __getattr__(name: str):
+    """Resolve engine classes on first access (PEP 562)."""
+    for engine_name, (_, class_name) in _ENGINE_MODULES.items():
+        if name == class_name:
+            return _load_engine_class(engine_name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 # ---------------------------------------------------------------------------
 # Global state — engines loaded lazily on first use to save startup time
@@ -103,14 +132,16 @@ def _get_bg_remover() -> BackgroundRemover:
 def _get_engine(name: str):
     global _engines
     if name not in _engines:
+        # APP-15: the engine class is imported here, not at module import.
+        engine_cls = _load_engine_class(name)
         if name == "TripoSR":
-            e = TriposrEngine(device=DEVICE)
+            e = engine_cls(device=DEVICE)
         elif name == "TRELLIS":
-            e = TrellisEngine(device=DEVICE, output_format="mesh", slat_steps=8, sparse_steps=8)
+            e = engine_cls(device=DEVICE, output_format="mesh", slat_steps=8, sparse_steps=8)
         elif name == "LGM":
-            e = LGMEngine(device=DEVICE)
+            e = engine_cls(device=DEVICE)
         elif name == "SPAR3D":
-            e = Spar3dEngine(device=DEVICE)
+            e = engine_cls(device=DEVICE)
         else:
             raise ValueError(f"Unknown engine: {name}")
         e.load_model()
@@ -246,7 +277,8 @@ def _render_preview(mesh) -> Image.Image | None:
             faces=mesh.faces,
             vertex_colors=(
                 (mesh.vertex_colors * 255).astype(np.uint8)
-                if mesh.vertex_colors is not None else None
+                if mesh.vertex_colors is not None
+                else None
             ),
             process=False,
         )
@@ -258,6 +290,7 @@ def _render_preview(mesh) -> Image.Image | None:
             try:
                 png = scene.save_image(resolution=(256, 256), visible=True)
                 from io import BytesIO
+
                 frames.append(Image.open(BytesIO(png)).convert("RGB"))
             except Exception:
                 pass
@@ -387,7 +420,9 @@ if __name__ == "__main__":
 
     # Fail closed: both credentials must be set together
     if bool(auth_username) != bool(auth_password):
-        sys.exit("[SECURITY] Both GRADIO_USERNAME and GRADIO_PASSWORD must be set (got only one). Refusing to start.")
+        sys.exit(
+            "[SECURITY] Both GRADIO_USERNAME and GRADIO_PASSWORD must be set (got only one). Refusing to start."
+        )
 
     auth = None
     if auth_username and auth_password:
@@ -399,7 +434,7 @@ if __name__ == "__main__":
     app.launch(
         server_name=os.environ.get("GRADIO_SERVER_NAME", "127.0.0.1"),
         server_port=int(os.environ.get("PORT", 7860)),
-        share=False,         # SECURITY FIX: never auto-create public tunnel
-        auth=auth,           # SECURITY FIX: require auth if credentials provided
-        show_error=False,    # SECURITY FIX: never expose tracebacks to users
+        share=False,  # SECURITY FIX: never auto-create public tunnel
+        auth=auth,  # SECURITY FIX: require auth if credentials provided
+        show_error=False,  # SECURITY FIX: never expose tracebacks to users
     )
