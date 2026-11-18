@@ -824,6 +824,7 @@ class BenchmarkRunner:
         max_wall_minutes: float | None = None,
         alignment_subsample_points: int = ALIGNMENT_SUBSAMPLE_POINTS,
         protocol: ProtocolConfig = DEFAULT_PROTOCOL,
+        max_retries: int = 2,
     ):
         self.dataset_path = Path(dataset_path)
         self.engines = engines
@@ -838,6 +839,10 @@ class BenchmarkRunner:
         # EVAL-13: exposed so the protocol's ICP subsample is configurable.
         self.alignment_subsample_points = int(alignment_subsample_points)
         self.protocol = protocol
+        # EVAL-23: how many times a sample may fail before resume stops
+        # retrying it. Failed rows carry an error_type and no chamfer_distance,
+        # so without a budget they were retried on every run.
+        self.max_retries = int(max_retries)
         self._t_runner_start = time.perf_counter()
         self._stop_requested = False
         self._meshes_saved = 0
@@ -937,6 +942,21 @@ class BenchmarkRunner:
                 and r.get("chamfer_distance") is not None
                 and not pd.isna(r.get("chamfer_distance"))
             }
+            # EVAL-23: a failed row has no chamfer_distance, so the filter above
+            # never counted it and the sample was retried on every resume — a
+            # permanently failing object blocked completion forever. Count the
+            # recorded attempts and stop retrying once the budget is spent.
+            failed_attempts: dict[str, int] = {}
+            for r in self.results:
+                if r.get("engine") == engine_name and r.get("error_type"):
+                    sid = r.get("sample_id")
+                    failed_attempts[sid] = failed_attempts.get(sid, 0) + 1
+            given_up = {sid for sid, n in failed_attempts.items() if n >= self.max_retries}
+            if given_up:
+                print(
+                    f"  [{engine_name}] {len(given_up)} sample(s) hit the "
+                    f"max_retries={self.max_retries} budget and will not be retried."
+                )
             print(
                 f"\n{'=' * 60}\n  Evaluating: {engine_name} (already completed: {len(done_ids)}/{len(samples)})\n{'=' * 60}"
             )
@@ -963,6 +983,11 @@ class BenchmarkRunner:
                 if sample.sample_id in done_ids:
                     print(
                         f"  [{engine_name}] ({idx + 1}/{len(samples)}) {sample.sample_id} -> CACHED (CD={next(r['chamfer_distance'] for r in self.results if r.get('engine') == engine_name and r.get('sample_id') == sample.sample_id):.4f}) ✅"
+                    )
+                    continue
+                if sample.sample_id in given_up:
+                    print(
+                        f"  [{engine_name}] ({idx + 1}/{len(samples)}) {sample.sample_id} -> SKIPPED (failed {failed_attempts[sample.sample_id]}x, max_retries={self.max_retries})"
                     )
                     continue
                 print(
