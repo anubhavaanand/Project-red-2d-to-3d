@@ -17,6 +17,13 @@ Both CSVs are derived from the same final 400 evaluations; the 40-row file is a 
 
 `mesh_manifest.csv` lists every exported `*_mesh.obj`: 400 rows (100 objects × 4 engines) with size, SHA-256, vertex and face counts.
 
+**Provenance columns.** Every row also records which code produced it:
+
+- `code_sha` — the full 40-character commit SHA of the run (`09131e61…`, the commit behind the published numbers; see README).
+- `protocol_version` — the evaluation-protocol revision (`v35`).
+
+A mesh can therefore be traced to a protocol version without guessing from the file layout.
+
 **The `path` column is relative to the Kaggle run root, which is not in this repository.** Paths look like `batch1_100obj_v35/outputs/...`, and neither `batch1_100obj_v35/` nor `batch2_100obj_v35/` exists here. To resolve a path, download the run tree and join it:
 
 ```python
