@@ -80,7 +80,10 @@ class TrellisEngine(AbstractEngine):
         from huggingface_hub import snapshot_download
 
         print("[TRELLIS] Fetching microsoft/TRELLIS-image-large snapshot …")
-        local_dir = snapshot_download("microsoft/TRELLIS-image-large")
+        local_dir = snapshot_download(
+            "microsoft/TRELLIS-image-large",
+            revision="25e0d31ffbebe4b5a97464dd851910efc3002d96",  # pinned SHA
+        )
         pipe = TrellisImageTo3DPipeline.from_pretrained(local_dir)
 
         if self.staged_offload:

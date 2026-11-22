@@ -114,7 +114,9 @@ class LGMEngine(AbstractEngine):
         self.opt = config_defaults["big"] if big else Options()
         self.model = LGM(self.opt)
         ckpt_path = hf_hub_download(
-            repo_id="ashawkey/LGM", filename="model_fp16_fixrot.safetensors"
+            repo_id="ashawkey/LGM",
+            filename="model_fp16_fixrot.safetensors",
+            revision="bc0097d24ffc5efc2e6a216edd579128f85f53ab",  # pinned SHA
         )
         ckpt = load_file(ckpt_path, device="cpu")
         model_sd = self.model.state_dict()

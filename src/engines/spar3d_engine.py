@@ -131,6 +131,7 @@ class Spar3dEngine(AbstractEngine):
                 config_name="config.yaml",
                 weight_name="model.safetensors",
                 low_vram_mode=self.low_vram_mode,
+                revision="5699918cb34f55cd7d828493d2725f3038313761",  # pinned SHA
             )
         except Exception as e:
             print(f"[SPAR3D] Primary repo gated ({e}); falling back to public mirror zimengxiong/Modelr-SPAR3D …")
@@ -139,6 +140,7 @@ class Spar3dEngine(AbstractEngine):
                 config_name="config.yaml",
                 weight_name="model.safetensors",
                 low_vram_mode=self.low_vram_mode,
+                revision="af033552e8c7d25971c4fca69ab4c926f43b2ec2",  # pinned SHA
             )
         self.model.to(self.device).eval()
         self._foreground_crop = foreground_crop
