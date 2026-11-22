@@ -4,7 +4,7 @@ Every kernel clones the benchmark repo at a pinned commit. Two things must hold:
 
 1. the URL is the canonical repo, not the pre-rename name that GitHub happens to
    redirect (a redirect can be dropped, and the old name is claimable by anyone);
-2. the commit is actually on the remote, or `git clone -b <sha>` fails.
+2. the commit is actually on the remote, or the pin cannot be fetched.
 """
 
 import json
@@ -34,7 +34,14 @@ def _clone_lines(path: Path) -> list[str]:
     ]
 
 
-# Matches the clone of the benchmark repo specifically, e.g.
+# Kernels pin the benchmark repo by fetching one commit, e.g.
+#   ["git", "-C", CODE_DIR, "fetch", "--depth", "1", "origin", "<sha>"]
+#   ["git", "-C", CODE_DIR, "checkout", "FETCH_HEAD"]
+# GitHub refuses `clone -b <sha>` for a commit that is not a branch tip, so the
+# fetch form is the one that actually works for old pins.
+_BENCH_FETCH = re.compile(r'"fetch",\s*"--depth",\s*"1",\s*"origin",\s*"([0-9a-f]{40})"')
+
+# Older kernels cloned the benchmark repo directly:
 #   ["git", "clone", "--depth", "1", "-b", "<sha>", "<url>", CODE_DIR]
 _BENCH_CLONE = re.compile(
     r'"git",\s*"clone"[^\]]*?"-b",\s*"([0-9a-f]{40}|main)",\s*"'
@@ -43,11 +50,13 @@ _BENCH_CLONE = re.compile(
 
 
 def _pinned_sha(path: Path) -> str | None:
-    """Return the -b ref used to clone the benchmark repo, or None."""
+    """Return the commit the benchmark repo is pinned to, or None."""
     for src in _cell_sources(path).values():
-        m = _BENCH_CLONE.search(" ".join(src.split()))
-        if m:
-            return m.group(1)
+        flat = " ".join(src.split())
+        for pattern in (_BENCH_FETCH, _BENCH_CLONE):
+            m = pattern.search(flat)
+            if m:
+                return m.group(1)
     return None
 
 
@@ -77,14 +86,14 @@ class TestPinnedCommit:
     def test_kernel_pins_a_full_sha(self, kernel):
         """Not `-b main`: an unpinned clone makes runs non-reproducible."""
         pin = _pinned_sha(kernel)
-        assert pin, f"{kernel.name}: no benchmark clone pin found"
+        assert pin, f"{kernel.name}: no benchmark repo pin found"
         assert pin != "main", (
-            f"{kernel.name} clones `-b main`, so its code version drifts; "
+            f"{kernel.name} tracks `main`, so its code version drifts; "
             f"pin a 40-char SHA like the other kernels do"
         )
 
     def test_pinned_sha_exists_on_the_remote(self):
-        """A clone -b <sha> fails if the commit is not on the default branch."""
+        """A pinned fetch fails if the commit is not reachable from a ref."""
         shas = {_pinned_sha(k) for k in KERNELS} - {None}
         assert shas, "no pinned SHAs found"
         try:
