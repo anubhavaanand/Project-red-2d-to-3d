@@ -1,0 +1,154 @@
+{
+  "_comment": "Upstream code pins for the 400-run benchmark (results/unified_results_4engines_100obj.csv).",
+  "schema_version": 1,
+  "recorded": "2026-11-22",
+  "purpose": "Pin the repos the kernels clone unpinned, so a future HEAD move cannot silently change what produced the published numbers. Two pin classes: (a) nine repos pinned at their HEAD as of 2026-11-22 — for each of these, HEAD today equals HEAD at run time because the HEAD commit predates the publish run (2026-10-26) and has not moved since, so pinning is a no-op for the published data; (b) microsoft/TRELLIS, pinned at 442aa1e1af — the tip of main for the entire publish run, and deliberately NOT today's HEAD, because main advanced on 2026-10-27 (193e0502b5, CI-only). Both classes are no-ops for the published data; class (b) is a robustness pin only.",
+  "benchmark_code": {
+    "repo": "https://github.com/anubhavaanand/Project-red-2d-to-3d",
+    "sha": "09131e61568d98401e71861bc27fdce6637b2f20",
+    "note": "Published baseline. Already pinned by every kernel's shallow fetch."
+  },
+  "cloned_repos": {
+    "triposr_repo_sha": {
+      "repo": "https://github.com/VAST-AI-Research/TripoSR",
+      "sha": "107cefdc244c39106fa830359024f6a2f1c78871",
+      "head_date": "2026-06-04",
+      "state_at_publish": "unpinned clone; HEAD resolved to this SHA and has not moved since 2026-06-04",
+      "robustness": "pure no-op - commit predates the publish run"
+    },
+    "lgm_repo_sha": {
+      "repo": "https://github.com/3DTopia/LGM",
+      "sha": "fe8d12cff8c827df7bb77a3c8e8b37408cb6fe4c",
+      "head_date": "2024-04-03",
+      "state_at_publish": "unpinned clone; dormant repo, same SHA since 2024-04-03",
+      "robustness": "pure no-op"
+    },
+    "mvdream_repo_sha": {
+      "repo": "https://github.com/ashawkey/mvdream_diffusers",
+      "sha": "8b318efac486784819502b88952fae970f40a47d",
+      "head_date": "2024-03-26",
+      "state_at_publish": "unpinned clone; dormant repo",
+      "robustness": "pure no-op"
+    },
+    "rasterizer_sha": {
+      "repo": "https://github.com/ashawkey/diff-gaussian-rasterization",
+      "sha": "8829d14f814fccdaf840b7b0f3021a616583c0a1",
+      "head_date": "2024-07-24",
+      "state_at_publish": "unpinned clone; dormant repo",
+      "robustness": "pure no-op",
+      "note": "Compiled as a CUDA extension. A HEAD move here would change rasterization numerics for all LGM metrics."
+    },
+    "spar3d_repo_sha": {
+      "repo": "https://github.com/Stability-AI/stable-point-aware-3d",
+      "sha": "fdc311b16809e6a8adc2f5a3407ebb3db1a95bd1",
+      "head_date": "2025-05-05",
+      "state_at_publish": "unpinned clone; same SHA since 2025-05-05",
+      "robustness": "pure no-op"
+    },
+    "clip_repo_sha": {
+      "repo": "https://github.com/openai/CLIP",
+      "sha": "d05afc436d78f1c48dc0dbf8e5980a9d471f35f6",
+      "head_date": "2026-03-25",
+      "state_at_publish": "unpinned clone; HEAD predates the run",
+      "robustness": "pure no-op"
+    },
+    "alphaclip_repo_sha": {
+      "repo": "https://github.com/SunzeY/AlphaCLIP",
+      "sha": "ef9262bc539728bf8ef2dfe9c402ae12bbfcd9ff",
+      "head_date": "2025-07-20",
+      "state_at_publish": "unpinned clone; same SHA since 2025-07-20",
+      "robustness": "pure no-op"
+    },
+    "diffoctreerast_sha": {
+      "repo": "https://github.com/JeffreyXiang/diffoctreerast",
+      "sha": "b09c20b84ec3aace4729e6e18a613112320eca3a",
+      "head_date": "2024-12-05",
+      "state_at_publish": "unpinned clone; dormant repo",
+      "robustness": "pure no-op"
+    },
+    "nvdiffrast_sha": {
+      "repo": "https://github.com/NVlabs/nvdiffrast",
+      "sha": "253ac4fcea7de5f396371124af597e6cc957bfae",
+      "head_date": "2025-12-05",
+      "state_at_publish": "installed via git+https unpinned",
+      "robustness": "pure no-op"
+    },
+    "trellis_repo_sha": {
+      "repo": "https://github.com/microsoft/TRELLIS",
+      "sha": "442aa1e1afb9014e80681d3bf604e8d728a86ee7",
+      "head_date": "2025-11-05",
+      "state_at_publish": "already pinned in-kernel via _ensure_checkout(..., pin)",
+      "robustness": "already pinned - listed for completeness",
+      "do_not_upgrade_to": {
+        "sha": "2b22e06784098195c0490d019c88f59119467fdc",
+        "sha_full_scope": "2b22e06784098195c0490d019c88f59119467fdc and 193e0502b5cb3eb5997ec457d5340e95d09b158e — both CI-only",
+        "commit_date": "2026-08-24",
+        "why": "Two later commits touch ONLY .github/dependabot.yml and .github/workflows/codeql.yml: 2b22e06784098195c0490d019c88f59119467fdc (authored 2026-08-24, 'Pin GitHub Actions to full-length commit SHAs') and 193e0502b5cb3eb5997ec457d5340e95d09b158e (2026-10-27 05:00 UTC, PR #364, same purpose). Neither touches library code, so neither changes FlexiCubes or any metric — the 'CI-only, harmless' conclusion stands. Reachability, however, is NOT implied by commit dates: 2b22e06784 was NOT in the published run's history. It sat on a side branch whose parent is 442aa1e1af and entered main only via the 2026-10-27 merge 193e0502b5, whose parents are [442aa1e1af, 2b22e06784]. On 2026-10-26 main's tip was 442aa1e1af — what an unpinned clone would have fetched, and what the in-kernel checkout -f pins; both paths agree, which is what makes the published TRELLIS code bit-identical.",
+        "verified_files": [
+          ".github/dependabot.yml",
+          ".github/workflows/codeql.yml"
+        ]
+      }
+    }
+  },
+  "already_pinned_elsewhere": {
+    "utils3d": {
+      "repo": "https://github.com/EasternJournalist/utils3d",
+      "sha": "9a4eb15e4021b67b12c460c7057d642626897ec8",
+      "note": "Pinned inline in the pip install line of batch2/verify kernels. Not in cloned_repos because it is a pip dependency, not a clone."
+    }
+  },
+  "weight_provenance": {
+    "_comment": "Why the pins below can stand in for the publish-run snapshots.",
+    "at_publish_commit": "git grep revision= -- src/engines/ returns NOTHING at 09131e61 — no HF revision was pinned when the 400 rows were produced.",
+    "pins_added": "2026-11-15, by SEC-11 (04548dd, fix(sec-11)) and SEC-07 (18b222d, fix(sec-07)). 04548dd is exactly 10 insertions / 2 deletions across the four engine files, pure revision= kwargs, zero logic changes.",
+    "snapshot_equivalence": "Every HF repo HEAD today equals its pinned revision, and every lastModified predates 2026-10-26; therefore the November pins are byte-identical to the October publish-run snapshots.",
+    "pinned_paper_code_commit": "aae25900d34298a5188d9d85ee6394aaa769928c (branch pinned/v35-paper, tag v35-pinned) = 09131e61 + 04548dd cherry-picked. Single commit carrying both the code that produced the 400 rows and the weight pins that secure them.",
+    "known_accepted_risks": [
+      "ImageDream (ashawkey/imagedream-ipmv-diffusers) remains unpinned at 09131e61; only a 7-char 73a0341 pin exists downstream. Harmless: the repo has not changed since 2024-01-14.",
+      "trust_remote_code=True is present at 09131e61 for ImageDream's mv_unet.py — a known accepted risk inherited from the publish run (SEC-07's snapshot_download rewrite is a behaviour change, deliberately excluded from aae2590)."
+    ]
+  },
+  "hf_model_pins": {
+    "_comment": "Already enforced in src/engines/*.py via revision=. Listed for a single source of truth.",
+    "triposr_weights": {
+      "repo": "stabilityai/TripoSR",
+      "revision": "5b521936b01fbe1890f6f9baed0254ab6351c04a",
+      "gated": false
+    },
+    "lgm_weights": {
+      "repo": "ashawkey/LGM",
+      "file": "model_fp16_fixrot.safetensors",
+      "revision": "bc0097d24ffc5efc2e6a216edd579128f85f53ab",
+      "gated": false
+    },
+    "imagedream_weights": {
+      "repo": "ashawkey/imagedream-ipmv-diffusers",
+      "revision": "73a0341",
+      "gated": false,
+      "note": "SHORT (7-char) pin - the only non-40-char pin in the codebase. Worth upgrading to the full SHA."
+    },
+    "trellis_weights": {
+      "repo": "microsoft/TRELLIS-image-large",
+      "revision": "25e0d31ffbebe4b5a97464dd851910efc3002d96",
+      "gated": false
+    },
+    "spar3d_weights": {
+      "repo": "stabilityai/stable-point-aware-3d",
+      "revision": "5699918cb34f55cd7d828493d2725f3038313761",
+      "gated": "auto",
+      "note": "Access granted 2026-11-22. Which checkpoint the published run used is indeterminate: at 09131e6 the fallback to the mirror was UNCONDITIONAL on any primary-repo failure, and nothing records which branch was taken. Immaterial: both checkpoints are 7,326,949,440 bytes with identical config.yaml."
+    },
+    "spar3d_mirror_weights": {
+      "repo": "zimengxiong/Modelr-SPAR3D",
+      "revision": "af033552e8c7d25971c4fca69ab4c926f43b2ec2",
+      "gated": false,
+      "note": "Community mirror, byte-identical checkpoint to the official repo (7,326,949,440 bytes, identical config.yaml). Whether the published run used the mirror or the primary is indeterminate — see spar3d_weights."
+    }
+  },
+  "non_hf_runtime_assets": {
+    "_comment": "SHA-256 pinned and verified in src/model_weights.py before use.",
+    "isnet-general-use.onnx": "60920e99c45464f2ba57bee2ad08c919a52bbf852739e96947fbb4358c0d964a",
+    "vgg16-397923af.pth": "397923af8e79cdbb6a7127f12361acd7a2f83e06b05044ddf496e83de57a5bf0"
+  }
+}

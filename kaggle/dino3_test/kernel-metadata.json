@@ -1,0 +1,15 @@
+{
+  "id": "anubhavaanand/image-to-3d-dino3-test",
+  "title": "image-to-3d-dino3-test",
+  "code_file": "kernel_dino3_test.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_tpu": false,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "model_sources": []
+}
